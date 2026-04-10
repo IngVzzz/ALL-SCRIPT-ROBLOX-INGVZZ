@@ -1,0 +1,88 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local Config = {
+    HITBOX_Enabled = true,
+    HITBOX_Size = 17,
+}
+
+local OriginalHitboxSizes = {}
+
+local function GetRole()
+    if not LocalPlayer.Team then return "Unknown" end
+    local name = LocalPlayer.Team.Name
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" then return "Survivor" end
+    return "Lobby"
+end
+
+local function IsSurvivor(player)
+    return player and player.Team and player.Team.Name == "Survivors"
+end
+
+local function UpdateHitboxes()
+    if GetRole() ~= "Killer" then
+        for player, originalSize in pairs(OriginalHitboxSizes) do
+            if player and player.Character then
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.Size = originalSize
+                    root.Transparency = 1
+                    root.CanCollide = true
+                end
+            end
+        end
+        OriginalHitboxSizes = {}
+        return
+    end
+    
+    if not Config.HITBOX_Enabled then
+        for player, originalSize in pairs(OriginalHitboxSizes) do
+            if player and player.Character then
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.Size = originalSize
+                    root.Transparency = 1
+                    root.CanCollide = true
+                end
+            end
+        end
+        OriginalHitboxSizes = {}
+        return
+    end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and IsSurvivor(player) then
+            local char = player.Character
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                
+                if root and hum and hum.Health > 0 then
+                    if not OriginalHitboxSizes[player] then
+                        OriginalHitboxSizes[player] = root.Size
+                    end
+                    
+                    local size = Config.HITBOX_Size
+                    root.Size = Vector3.new(size, size, size)
+                    root.CanCollide = false
+                    root.Transparency = 1
+                elseif root then
+                    if OriginalHitboxSizes[player] then
+                        root.Size = OriginalHitboxSizes[player]
+                        root.Transparency = 1
+                        root.CanCollide = true
+                        OriginalHitboxSizes[player] = nil
+                    end
+                end
+            end
+        end
+    end
+end
+
+Players.PlayerRemoving:Connect(function(player)
+    OriginalHitboxSizes[player] = nil
+end)
+
+RunService.Heartbeat:Connect(UpdateHitboxes)

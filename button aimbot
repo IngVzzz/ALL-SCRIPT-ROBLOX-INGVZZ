@@ -1,0 +1,161 @@
+local aimbotEnabled = false
+local currentTarget = nil
+local maxLockDistance = 35
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+
+local function lockMouse()
+    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    UserInputService.MouseIconEnabled = false
+end
+
+local function unlockMouse()
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    UserInputService.MouseIconEnabled = true
+end
+
+local function getClosestTarget()
+    local closestTarget = nil
+    local shortestDistance = math.huge
+    local screenCenter = Camera.ViewportSize / 2
+    local playerPosition = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and Players.LocalPlayer.Character["HumanoidRootPart"].Position or Vector3.new(0, 0, 0)
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer and player.Character then
+            local targetPart = player.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if targetPart and humanoid and humanoid.Health > 0 then
+                local distanceFromPlayer = (playerPosition - targetPart.Position).Magnitude
+                
+                if distanceFromPlayer <= maxLockDistance then
+                    local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                    local distanceOnScreen = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+
+                    if onScreen and distanceOnScreen < shortestDistance then
+                        closestTarget = player
+                        shortestDistance = distanceOnScreen
+                    end
+                end
+            end
+        end
+    end
+    return closestTarget
+end
+
+local function lockOnTarget()
+    if currentTarget and currentTarget.Character then
+        local targetPart = currentTarget.Character:FindFirstChild("HumanoidRootPart")
+        if targetPart then
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), 0.9)
+        else
+            currentTarget = nil
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if aimbotEnabled then
+        if not currentTarget then
+            currentTarget = getClosestTarget()
+        end
+        if currentTarget then
+            lockOnTarget()
+        end
+    end
+end)
+
+-- **GUI - Tombol bulat yang bisa di-drag**
+local function createGUI()
+    if game.CoreGui:FindFirstChild("SimpleAimbot") then
+        game.CoreGui.SimpleAimbot:Destroy()
+    end
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "SimpleAimbot"
+    ScreenGui.Parent = game.CoreGui
+
+    -- Tombol bulat
+    local button = Instance.new("ImageButton")
+    button.Size = UDim2.new(0, 50, 0, 50)
+    button.Position = UDim2.new(1, -210, 1, -420)
+    button.AnchorPoint = Vector2.new(1, 1)
+    button.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    button.BackgroundTransparency = 0.15
+    button.Image = "rbxassetid://3926305904"
+    button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    button.ImageTransparency = 0.2
+    button.Parent = ScreenGui
+    button.Draggable = false  -- Bisa di-drag!
+
+    local corner = Instance.new("UICorner", button)
+    corner.CornerRadius = UDim.new(1, 0)
+    
+    local stroke = Instance.new("UIStroke", button)
+    stroke.Color = Color3.fromRGB(255, 100, 100)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.5
+
+    -- Variabel untuk drag
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = button.Position
+        end
+    end)
+
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    button.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            button.Position = UDim2.new(
+                startPos.X.Scale, 
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    -- Fungsi toggle (tetap bisa diklik meskipun di-drag)
+    button.MouseButton1Click:Connect(function()
+        if not dragging then
+            aimbotEnabled = not aimbotEnabled
+            
+            if aimbotEnabled then
+                button.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+                button.BackgroundTransparency = 0.3
+                stroke.Color = Color3.fromRGB(100, 255, 100)
+                lockMouse()
+            else
+                button.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+                button.BackgroundTransparency = 0.15
+                stroke.Color = Color3.fromRGB(255, 100, 100)
+                unlockMouse()
+                currentTarget = nil
+            end
+        end
+        dragging = false
+    end)
+end
+
+createGUI()
+
+-- Safety unlock
+game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function()
+    if not aimbotEnabled then
+        unlockMouse()
+    end
+end)

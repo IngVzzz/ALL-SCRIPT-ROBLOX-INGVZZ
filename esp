@@ -1,0 +1,149 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local localPlayer = Players.LocalPlayer
+
+local Config = {
+    ESP = {
+        Enabled = true,
+        Players = {
+            ["Killer"] = {Color = Color3.fromRGB(255, 93, 108)},
+            ["Survivor"] = {Color = Color3.fromRGB(64, 224, 255)}
+        }
+    }
+}
+
+local activeHighlights = {}
+
+local function GetRole()
+    if not localPlayer.Team then return "Unknown" end
+    local name = localPlayer.Team.Name
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" then return "Survivor" end
+    return "Lobby"
+end
+
+local function IsESPAllowed()
+    local role = GetRole()
+    return role == "Killer" or role == "Survivor"
+end
+
+UserInputService.InputBegan:Connect(function(input, processed)
+    if not processed and input.KeyCode == Enum.KeyCode.V then
+        Config.ESP.Enabled = not Config.ESP.Enabled
+        
+        for _, highlight in pairs(activeHighlights) do
+            if highlight and highlight.Parent then
+                highlight.Enabled = Config.ESP.Enabled and IsESPAllowed()
+            end
+        end
+    end
+end)
+
+local function ApplyHighlight(obj, color)
+    if not obj or obj == localPlayer.Character then return end
+    if obj:FindFirstChild("RxmmyESP") then return end
+    
+    local h = Instance.new("Highlight")
+    h.Name = "RxmmyESP"
+    h.Adornee = obj
+    h.FillColor = color
+    h.OutlineColor = Color3.fromRGB(255, 255, 255)
+    h.FillTransparency = 0.3
+    h.OutlineTransparency = 0.7
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Enabled = Config.ESP.Enabled and IsESPAllowed()
+    h.Parent = obj
+    
+    activeHighlights[obj] = h
+    
+    obj.AncestryChanged:Connect(function()
+        if not obj.Parent then
+            activeHighlights[obj] = nil
+        end
+    end)
+end
+
+local function GetPlayerRole(p)
+    if p.Team then
+        local teamName = p.Team.Name:lower()
+        if teamName:find("killer") or teamName:find("murderer") or teamName:find("monster") then
+            return "Killer"
+        end
+    end
+    return "Survivor"
+end
+
+local function SetupPlayerESP(p)
+    if p == localPlayer then return end
+    
+    local function addHighlightToCharacter(char)
+        if not char then return end
+        task.wait(0.5)
+        local oldHighlight = char:FindFirstChild("RxmmyESP")
+        if oldHighlight then
+            activeHighlights[char] = nil
+            oldHighlight:Destroy()
+        end
+        ApplyHighlight(char, Config.ESP.Players[GetPlayerRole(p)].Color)
+    end
+    
+    p.CharacterAdded:Connect(addHighlightToCharacter)
+    
+    if p.Character then
+        addHighlightToCharacter(p.Character)
+    end
+end
+
+local function onPlayerRemoving(p)
+    if p.Character then
+        local highlight = p.Character:FindFirstChild("RxmmyESP")
+        if highlight then
+            activeHighlights[p.Character] = nil
+            highlight:Destroy()
+        end
+    end
+end
+
+local function watchForCutscene()
+    local lastChar = localPlayer.Character
+    local lastRole = GetRole()
+    
+    RunService.Heartbeat:Connect(function()
+        local currentRole = GetRole()
+        if currentRole ~= lastRole then
+            lastRole = currentRole
+            local espEnabled = Config.ESP.Enabled and IsESPAllowed()
+            for _, highlight in pairs(activeHighlights) do
+                if highlight and highlight.Parent then
+                    highlight.Enabled = espEnabled
+                end
+            end
+        end
+        
+        if localPlayer.Character ~= lastChar then
+            lastChar = localPlayer.Character
+            
+            task.wait(0.3)
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= localPlayer and p.Character then
+                    local highlight = p.Character:FindFirstChild("RxmmyESP")
+                    if highlight then
+                        highlight:Destroy()
+                        activeHighlights[p.Character] = nil
+                    end
+                    task.wait(0.1)
+                    ApplyHighlight(p.Character, Config.ESP.Players[GetPlayerRole(p)].Color)
+                end
+            end
+        end
+    end)
+end
+
+for _, p in ipairs(Players:GetPlayers()) do 
+    SetupPlayerESP(p) 
+end
+
+Players.PlayerAdded:Connect(SetupPlayerESP)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+watchForCutscene()

@@ -1,0 +1,127 @@
+local player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local char = player.Character or player.CharacterAdded:Wait()
+local humanoid = char:WaitForChild("Humanoid")
+local root = char:WaitForChild("HumanoidRootPart")
+
+-- SAFE GUI (Anti Delete)
+local gui = Instance.new("ScreenGui")
+gui.Name = "MoonwalkController"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.Parent = CoreGui   -- 🔥 Anti-delete FIX untuk Violence District
+
+-- Auto reparent kalau dihapus
+gui.AncestryChanged:Connect(function(_, parent)
+    if parent == nil then
+        gui.Parent = CoreGui
+    end
+end)
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 45, 0, 45)
+toggleButton.Position = UDim2.new(1, -60, 1, -110)
+toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+toggleButton.Text = "R"
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.TextScaled = true
+toggleButton.BorderSizePixel = 0
+toggleButton.Parent = gui
+
+-- Variabel
+local moonwalk = false
+local baseYaw = 0
+local currentYaw = 0
+local maxTurn = 40
+local turnSpeed = 850
+local returnSpeed = 800
+local turningLeft, turningRight = false, false
+
+local function getYaw(cf)
+ local _, y, _ = cf:ToEulerAnglesYXZ()
+ return math.deg(y)
+end
+
+local function setYaw(cf, yaw)
+ local pos = cf.Position
+ return CFrame.new(pos) * CFrame.Angles(0, math.rad(yaw), 0)
+end
+
+local function toggleMoonwalk()
+ moonwalk = not moonwalk
+ if moonwalk then
+  humanoid.AutoRotate = false
+  baseYaw = getYaw(root.CFrame)
+  currentYaw = baseYaw
+  toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+  toggleButton.Text = "L"
+ else
+  humanoid.AutoRotate = true
+  toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+  toggleButton.Text = "R"
+ end
+end
+
+toggleButton.MouseButton1Click:Connect(toggleMoonwalk)
+
+UIS.InputBegan:Connect(function(input)
+ if not moonwalk then return end
+ if input.KeyCode == Enum.KeyCode.D then
+  turningRight = true
+ elseif input.KeyCode == Enum.KeyCode.A then
+  turningLeft = true
+ end
+end)
+
+UIS.InputEnded:Connect(function(input)
+ if input.KeyCode == Enum.KeyCode.D then
+  turningRight = false
+ elseif input.KeyCode == Enum.KeyCode.A then
+  turningLeft = false
+ end
+end)
+
+UIS.TouchMoved:Connect(function(input)
+ if not moonwalk then return end
+ if math.abs(input.Delta.X) > 3 then
+  if input.Delta.X > 0 then
+   turningRight = true
+   turningLeft = false
+  else
+   turningLeft = true
+   turningRight = false
+  end
+ end
+end)
+
+UIS.TouchEnded:Connect(function()
+ turningLeft = false
+ turningRight = false
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+ if moonwalk and root then
+  if turningLeft then
+   currentYaw = math.clamp(currentYaw - turnSpeed * dt, baseYaw - maxTurn, baseYaw + maxTurn)
+  elseif turningRight then
+   currentYaw = math.clamp(currentYaw + turnSpeed * dt, baseYaw - maxTurn, baseYaw + maxTurn)
+  else
+   if currentYaw < baseYaw then
+    currentYaw = math.min(currentYaw + returnSpeed * dt, baseYaw)
+   elseif currentYaw > baseYaw then
+    currentYaw = math.max(currentYaw - returnSpeed * dt, baseYaw)
+   end
+  end
+
+  root.CFrame = setYaw(CFrame.new(root.CFrame.Position), currentYaw)
+ end
+end)
+
+player.CharacterAdded:Connect(function(newChar)
+ char = newChar
+ humanoid = newChar:WaitForChild("Humanoid")
+ root = newChar:WaitForChild("HumanoidRootPart")
+end)

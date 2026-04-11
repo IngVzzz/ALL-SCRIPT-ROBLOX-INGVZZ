@@ -1,0 +1,98 @@
+-- Auto Parrying Dagger - Violence District
+-- Otomatis parry setiap serangan Killer dalam radius efektif
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRoot = character:WaitForChild("HumanoidRootPart")
+
+-- Konfigurasi
+local RADIUS_PARRY = 12 -- jarak efektif parry (dalam stud)
+local COOLDOWN = 50 -- detik, sesuai deskripsi item
+
+local lastParryTime = 0
+local isHoldingDagger = false
+
+-- Fungsi cari Parrying Dagger di inventory
+local function findParryingDagger()
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name:lower():find("parrying") or tool.Name:lower():find("dagger") then
+            return tool
+        end
+    end
+    for _, tool in pairs(player.Backpack:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name:lower():find("parrying") or tool.Name:lower():find("dagger") then
+            return tool
+        end
+    end
+    return nil
+end
+
+-- Fungsi aktivasi guarding stance
+local function activateParry(daggerTool)
+    if not daggerTool then return end
+    -- Simulasi klik kanan atau tombol ability (biasanya E atau F)
+    local success, err = pcall(function()
+        -- Coba panggil event activation di tool
+        if daggerTool:FindFirstChild("Activate") and daggerTool.Activate:IsA("RemoteEvent") then
+            daggerTool.Activate:FireServer()
+        elseif daggerTool:FindFirstChild("Remote") and daggerTool.Remote:IsA("RemoteEvent") then
+            daggerTool.Remote:FireServer("Parry")
+        else
+            -- Fallback: kirim input simulasi
+            local VirtualInput = game:GetService("VirtualInputManager")
+            VirtualInput:SendKeyEvent(true, "F", false, game) -- ganti F sesuai tombol ability game
+            task.wait(0.05)
+            VirtualInput:SendKeyEvent(false, "F", false, game)
+        end
+    end)
+    if not success then
+        warn("Gagal aktivasi parry:", err)
+    end
+end
+
+-- Deteksi serangan Killer (berdasarkan animasi atau part yang mendekat)
+local function isKillerAttacking()
+    local killers = {}
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= player and plr.Team and plr.Team.Name:lower():find("killer") then
+            local killerChar = plr.Character
+            if killerChar and killerChar:FindFirstChild("HumanoidRootPart") then
+                local dist = (humanoidRoot.Position - killerChar.HumanoidRootPart.Position).Magnitude
+                if dist < RADIUS_PARRY then
+                    -- Cek apakah killer sedang dalam animasi serang
+                    local humanoid = killerChar:FindFirstChild("Humanoid")
+                    if humanoid then
+                        local animTrack = humanoid:FindFirstChild("Animator")
+                        if animTrack then
+                            for _, track in pairs(animTrack:GetPlayingAnimationTracks()) do
+                                if track.Animation and (track.Animation.Name:lower():find("attack") or track.Animation.Name:lower():find("swing")) then
+                                    return true
+                                end
+                            end
+                        end
+                    end
+                    return true -- fallback jika dekat tapi tidak bisa deteksi animasi
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Loop utama
+local dagger = findParryingDagger()
+if not dagger then
+    warn("Parrying Dagger tidak ditemukan di inventory")
+else
+    print("Auto Parry aktif, menunggu serangan Killer...")
+    while task.wait(0.1) do
+        local now = tick()
+        if now - lastParryTime >= COOLDOWN then
+            if isKillerAttacking() then
+                activateParry(dagger)
+                lastParryTime = now
+                print("Parry otomatis terpicu!")
+            end
+        end
+    end
+end

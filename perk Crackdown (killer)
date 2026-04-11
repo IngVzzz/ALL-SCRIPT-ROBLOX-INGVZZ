@@ -1,0 +1,185 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function GetRole()
+    if not LocalPlayer.Team then return "Unknown" end
+    local name = LocalPlayer.Team.Name
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" or name == "Survivor" then return "Survivor" end
+    return "Lobby"
+end
+
+-- Auto load: loop menunggu role Killer
+spawn(function()
+    while task.wait(0.5) do
+        local role = GetRole()
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        
+        if role == "Killer" and character and humanoid and humanoid.Health > 0 then
+            print("Auto load: Killer terdeteksi - Crackdown siap")
+            
+            -- ===== SCRIPT CRACKDOWN =====
+            local perkLevel = 3 -- 1=5 charges, 2=10 charges, 3=15 charges
+            local extraDamage = (perkLevel == 1 and 10) or (perkLevel == 2 and 20) or 28
+            
+            -- Fungsi untuk mencari semua generator di workspace
+            local function findGenerators()
+                local generators = {}
+                -- Cari berdasarkan nama umum generator
+                for _, obj in pairs(game.Workspace:GetDescendants()) do
+                    local nameLower = obj.Name:lower()
+                    if nameLower:find("generator") or nameLower:find("gen") or nameLower:find("repair") then
+                        if obj:IsA("BasePart") or obj:IsA("Model") then
+                            table.insert(generators, obj)
+                        end
+                    end
+                end
+                return generators
+            end
+            
+            -- Fungsi untuk memberikan damage ekstra ke generator
+            local function addDamageToGenerator(generator, baseDamage)
+                -- Metode 1: Jika generator memiliki nilai progress
+                local progressValue = generator:FindFirstChild("Progress") or 
+                                      generator:FindFirstChild("Charge") or 
+                                      generator:FindFirstChild("Completion")
+                
+                if progressValue and typeof(progressValue.Value) == "number" then
+                    progressValue.Value = math.max(0, progressValue.Value - extraDamage)
+                    print("Crackdown: " .. extraDamage .. " extra damage applied to generator")
+                    return true
+                end
+                
+                -- Metode 2: Jika generator menggunakan IntValue atau NumberValue
+                for _, child in pairs(generator:GetChildren()) do
+                    if child:IsA("IntValue") or child:IsA("NumberValue") then
+                        local childNameLower = child.Name:lower()
+                        if childNameLower:find("progress") or childNameLower:find("charge") or childNameLower:find("health") then
+                            child.Value = math.max(0, child.Value - extraDamage)
+                            print("Crackdown: " .. extraDamage .. " extra damage via " .. child.Name)
+                            return true
+                        end
+                    end
+                end
+                
+                -- Metode 3: Remote event/spoofing (lebih agresif)
+                local remote = ReplicatedStorage:FindFirstChild("DamageGenerator") or
+                               ReplicatedStorage:FindFirstChild("HitGenerator") or
+                               ReplicatedStorage:FindFirstChild("KillerDamage")
+                
+                if remote and remote:IsA("RemoteEvent") then
+                    remote:FireServer(generator, extraDamage)
+                    print("Crackdown: Extra damage sent via remote")
+                    return true
+                end
+                
+                return false
+            end
+            
+            -- Hook ke fungsi damage generator asli (method overriding)
+            local oldHitFunction = nil
+            
+            -- Coba temukan fungsi damage generator di game
+            local function hookGeneratorDamage()
+                -- Cari module atau function yang handle damage generator
+                for _, service in pairs(game:GetChildren()) do
+                    if service:IsA("ModuleScript") and service.Name:lower():find("generator") then
+                        local success, module = pcall(function() return require(service) end)
+                        if success and type(module) == "table" then
+                            for funcName, func in pairs(module) do
+                                if type(func) == "function" and (funcName:lower():find("damage") or funcName:lower():find("hit")) then
+                                    oldHitFunction = func
+                                    module[funcName] = function(...)
+                                        local args = {...}
+                                        local result = oldHitFunction(...)
+                                        -- Tambah damage ekstra
+                                        if args[1] and typeof(args[1]) == "Instance" then
+                                            addDamageToGenerator(args[1], extraDamage)
+                                        end
+                                        return result
+                                    end
+                                    print("Crackdown: Hooked into generator damage function")
+                                    return
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            
+            hookGeneratorDamage()
+            
+            -- Loop untuk mendeteksi ketika killer melakukan aksi damage ke generator
+            -- Metode alternatif: deteksi input atau animasi killer saat menyerang generator
+            local UserInputService = game:GetService("UserInputService")
+            
+            local function onAttack()
+                local character = LocalPlayer.Character
+                local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+                if not humanoidRootPart then return end
+                
+                -- Cek apakah ada generator di depan killer
+                local direction = character:GetPrimaryPartCFrame().LookVector
+                local origin = humanoidRootPart.Position
+                
+                for _, generator in pairs(findGenerators()) do
+                    local genPos = generator:IsA("BasePart") and generator.Position or 
+                                  (generator:FindFirstChild("PrimaryPart") and generator.PrimaryPart.Position) or
+                                  (generator:FindFirstChildWhichIsA("BasePart") and generator:FindFirstChildWhichIsA("BasePart").Position)
+                    
+                    if genPos then
+                        local distance = (origin - genPos).Magnitude
+                        if distance <= 10 then -- jarak serang
+                            local toGen = (genPos - origin).Unit
+                            local dot = direction:Dot(toGen)
+                            if dot > 0.7 then -- dalam sudut serang
+                                addDamageToGenerator(generator, extraDamage)
+                            end
+                        end
+                    end
+                end
+            end
+            
+            -- Deteksi klik mouse (serangan killer)
+            UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                if gameProcessed then return end
+                
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    task.wait(0.1) -- sedikit delay agar damage register
+                    onAttack()
+                end
+            end)
+            
+            -- Juga deteksi jika ada remote event untuk serangan
+            local attackRemote = ReplicatedStorage:FindFirstChild("Attack") or
+                                 ReplicatedStorage:FindFirstChild("KillerAttack") or
+                                 ReplicatedStorage:FindFirstChild("Damage")
+            
+            if attackRemote and attackRemote:IsA("RemoteEvent") then
+                local oldFire = attackRemote.FireServer
+                attackRemote.FireServer = function(...)
+                    local args = {...}
+                    oldFire(attackRemote, ...)
+                    
+                    -- Cek apakah serangan mengenai generator
+                    task.wait(0.05)
+                    onAttack()
+                end
+            end
+            
+            print("Crackdown aktif - Extra damage: +" .. extraDamage .. " charges per hit")
+            
+            -- Loop menjaga script tetap hidup
+            while task.wait(5) do
+                if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("Humanoid") or 
+                   LocalPlayer.Character.Humanoid.Health <= 0 then
+                    break
+                end
+            end
+        end
+    end
+end)
+
+print("Auto load Crackdown aktif - menunggu role Killer...")

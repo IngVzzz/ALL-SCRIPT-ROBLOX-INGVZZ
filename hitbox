@@ -1,10 +1,8 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
-local Config = {
-    HITBOX_Enabled = true,
-    HITBOX_Size = 17,
+local HitboxConfig = {
+    Size = 17
 }
 
 local OriginalHitboxSizes = {}
@@ -37,21 +35,6 @@ local function UpdateHitboxes()
         return
     end
     
-    if not Config.HITBOX_Enabled then
-        for player, originalSize in pairs(OriginalHitboxSizes) do
-            if player and player.Character then
-                local root = player.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    root.Size = originalSize
-                    root.Transparency = 1
-                    root.CanCollide = true
-                end
-            end
-        end
-        OriginalHitboxSizes = {}
-        return
-    end
-    
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and IsSurvivor(player) then
             local char = player.Character
@@ -64,17 +47,15 @@ local function UpdateHitboxes()
                         OriginalHitboxSizes[player] = root.Size
                     end
                     
-                    local size = Config.HITBOX_Size
+                    local size = HitboxConfig.Size
                     root.Size = Vector3.new(size, size, size)
                     root.CanCollide = false
                     root.Transparency = 1
-                elseif root then
-                    if OriginalHitboxSizes[player] then
-                        root.Size = OriginalHitboxSizes[player]
-                        root.Transparency = 1
-                        root.CanCollide = true
-                        OriginalHitboxSizes[player] = nil
-                    end
+                elseif root and OriginalHitboxSizes[player] then
+                    root.Size = OriginalHitboxSizes[player]
+                    root.Transparency = 1
+                    root.CanCollide = true
+                    OriginalHitboxSizes[player] = nil
                 end
             end
         end
@@ -85,4 +66,11 @@ Players.PlayerRemoving:Connect(function(player)
     OriginalHitboxSizes[player] = nil
 end)
 
-RunService.Heartbeat:Connect(UpdateHitboxes)
+local function StartHitboxLoop()
+    while true do
+        UpdateHitboxes()
+        task.wait(0.1)
+    end
+end
+
+task.spawn(StartHitboxLoop)

@@ -1,0 +1,282 @@
+-- Gate Mobile with Drag - Violence District
+-- Tombol sentuh yang bisa digeser
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- Konfigurasi
+local COOLDOWN = 20 -- detik
+local CHANNEL_TIME = 3 -- detik
+local BUTTON_SIZE = UDim2.new(0, 80, 0, 80)
+
+local lastUseTime = 0
+local isChanneling = false
+local button = nil
+local screenGui = nil
+local dragging = false
+local dragStart = nil
+local buttonStartPos = nil
+
+-- Fungsi cari item Gate
+local function findGate()
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") and (tool.Name:lower():find("gate") or tool.Name:lower():find("teleport")) then
+            return tool
+        end
+    end
+    for _, tool in pairs(player.Backpack:GetChildren()) do
+        if tool:IsA("Tool") and (tool.Name:lower():find("gate") or tool.Name:lower():find("teleport")) then
+            return tool
+        end
+    end
+    return nil
+end
+
+-- Fungsi aktivasi Gate
+local function activateGate(gateTool)
+    if not gateTool then
+        print("Gate tidak ditemukan")
+        return false
+    end
+    
+    if isChanneling then
+        print("Sedang channeling...")
+        return false
+    end
+    
+    local now = tick()
+    if now - lastUseTime < COOLDOWN then
+        local remaining = math.ceil(COOLDOWN - (now - lastUseTime))
+        print("Cooldown: " .. remaining .. " detik")
+        return false
+    end
+    
+    isChanneling = true
+    
+    if button then
+        button.Text = "Channeling..."
+        button.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+    end
+    
+    print("Channeling " .. CHANNEL_TIME .. " detik...")
+    
+    for i = CHANNEL_TIME, 1, -1 do
+        if button then
+            button.Text = i .. "s"
+        end
+        task.wait(1)
+        if not character or not character.Parent then
+            isChanneling = false
+            return false
+        end
+    end
+    
+    local success, err = pcall(function()
+        if gateTool:FindFirstChild("Activate") and gateTool.Activate:IsA("RemoteEvent") then
+            gateTool.Activate:FireServer()
+        elseif gateTool:FindFirstChild("Remote") and gateTool.Remote:IsA("RemoteEvent") then
+            gateTool.Remote:FireServer("Gate")
+        else
+            local VirtualInput = game:GetService("VirtualInputManager")
+            VirtualInput:SendKeyEvent(true, "E", false, game)
+            task.wait(0.05)
+            VirtualInput:SendKeyEvent(false, "E", false, game)
+        end
+    end)
+    
+    isChanneling = false
+    lastUseTime = tick()
+    
+    if success then
+        print("Gate berhasil! Teleportasi.")
+        if button then
+            button.Text = "Gate (" .. COOLDOWN .. "s)"
+            button.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            task.spawn(function()
+                for i = COOLDOWN, 1, -1 do
+                    if button then
+                        button.Text = "Gate (" .. i .. "s)"
+                    end
+                    task.wait(1)
+                end
+                if button then
+                    button.Text = "GATE"
+                    button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+                end
+            end)
+        end
+        return true
+    else
+        print("Gagal:", err)
+        if button then
+            button.Text = "GATE"
+            button.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+            task.wait(1)
+            button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        end
+        return false
+    end
+end
+
+-- Fungsi drag (geser tombol)
+local function setupDrag()
+    local userInputService = game:GetService("UserInputService")
+    local runService = game:GetService("RunService")
+    
+    local function updateDrag(input)
+        if dragging and button then
+            local delta = input.Position - dragStart
+            local newPosition = UDim2.new(
+                buttonStartPos.X.Scale,
+                buttonStartPos.X.Offset + delta.X,
+                buttonStartPos.Y.Scale,
+                buttonStartPos.Y.Offset + delta.Y
+            )
+            button.Position = newPosition
+        end
+    end
+    
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            buttonStartPos = button.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    -- Simpan posisi
+                    if button then
+                        local savedPos = button.Position
+                        task.spawn(function()
+                            pcall(function()
+                                if screenGui then
+                                    local saveFolder = Instance.new("Folder")
+                                    saveFolder.Name = "GateDragPos"
+                                    saveFolder.Parent = screenGui
+                                    local posX = Instance.new("NumberValue")
+                                    posX.Name = "PosX"
+                                    posX.Value = savedPos.X.Offset
+                                    posX.Parent = saveFolder
+                                    local posY = Instance.new("NumberValue")
+                                    posY.Name = "PosY"
+                                    posY.Value = savedPos.Y.Offset
+                                    posY.Parent = saveFolder
+                                end
+                            end)
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+    
+    userInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            updateDrag(input)
+        end
+    end)
+end
+
+-- Muat posisi tersimpan
+local function loadSavedPosition()
+    pcall(function()
+        if screenGui and screenGui:FindFirstChild("GateDragPos") then
+            local saveFolder = screenGui.GateDragPos
+            local posX = saveFolder:FindFirstChild("PosX")
+            local posY = saveFolder:FindFirstChild("PosY")
+            if posX and posY then
+                button.Position = UDim2.new(0, posX.Value, 1, posY.Value)
+                return true
+            end
+        end
+    end)
+    return false
+end
+
+-- Buat tombol di layar
+local function createButton()
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "GateMobileUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = player.PlayerGui
+    
+    button = Instance.new("TextButton")
+    button.Name = "GateButton"
+    button.Size = BUTTON_SIZE
+    button.Position = UDim2.new(0, 20, 1, -100) -- posisi default
+    button.Text = "GATE"
+    button.TextSize = 24
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+    button.BackgroundTransparency = 0.2
+    button.BorderSizePixel = 0
+    button.Font = Enum.Font.GothamBold
+    button.Parent = screenGui
+    button.AutoButtonColor = false
+    
+    -- Efek rounded
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = button
+    
+    -- Stroke
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Parent = button
+    
+    -- Muat posisi terakhir
+    loadSavedPosition()
+    
+    -- Setup drag
+    setupDrag()
+    
+    -- Event klik (tanpa mengganggu drag)
+    local pressTime = 0
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            pressTime = tick()
+        end
+    end)
+    
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local duration = tick() - pressTime
+            -- Jika bukan drag (sentuhan pendek), eksekusi Gate
+            if duration < 0.3 and not dragging then
+                local gate = findGate()
+                if gate then
+                    activateGate(gate)
+                else
+                    print("Gate tidak ada di inventory")
+                    button.Text = "NO GATE"
+                    button.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+                    task.wait(1)
+                    button.Text = "GATE"
+                    button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+                end
+            end
+        end
+    end)
+    
+    print("Tombol Gate muncul - Tekan dan tahan untuk geser, tap untuk pakai")
+end
+
+-- Jalankan
+local gateItem = findGate()
+if gateItem then
+    print("Item Gate ditemukan: " .. gateItem.Name)
+else
+    print("Gate tidak ditemukan, tombol tetap dibuat")
+end
+
+createButton()
+
+-- Console command
+_G.UseGate = function()
+    local gate = findGate()
+    if gate then
+        activateGate(gate)
+    end
+end
+print("Ketik _G.UseGate() di console untuk manual")

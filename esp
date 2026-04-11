@@ -49,8 +49,8 @@ local function ApplyHighlight(obj, color)
     h.Adornee = obj
     h.FillColor = color
     h.OutlineColor = Color3.fromRGB(255, 255, 255)
-    h.FillTransparency = 0.5
-    h.OutlineTransparency = 0.9
+    h.FillTransparency = 0.4
+    h.OutlineTransparency = 0.95
     h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     h.Enabled = Config.ESP.Enabled and IsESPAllowed()
     h.Parent = obj

@@ -1,0 +1,83 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local function GetRole()
+    if not LocalPlayer.Team then return "Unknown" end
+    local name = LocalPlayer.Team.Name
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" or name == "Survivor" then return "Survivor" end
+    return "Lobby"
+end
+
+-- Auto load: loop tanpa henti, menunggu kondisi Survivor siap
+spawn(function()
+    while task.wait(0.5) do
+        local role = GetRole()
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChild("Humanoid")
+        
+        -- Hanya lanjutkan jika role Survivor dan karakter hidup
+        if role == "Survivor" and character and humanoid and humanoid.Health > 0 then
+            print("Auto load: Survivor terdeteksi - Last Stand siap")
+            
+            -- ===== SCRIPT LAST STAND =====
+            local function findKiller()
+                for _, obj in pairs(game.Workspace:GetChildren()) do
+                    if obj:FindFirstChild("Humanoid") and obj ~= character then
+                        local player = Players:GetPlayerFromCharacter(obj)
+                        if player and player.Team and player.Team.Name == "Killer" then
+                            return obj
+                        end
+                    end
+                end
+                return nil
+            end
+            
+            local perkLevel = 3
+            local duration = (perkLevel == 1 and 10) or (perkLevel == 2 and 15) or 20
+            
+            while task.wait(0.5) do
+                -- Update karakter setiap loop (bisa berubah saat respawn)
+                local currentChar = LocalPlayer.Character
+                local currentHum = currentChar and currentChar:FindFirstChild("Humanoid")
+                if not currentChar or not currentHum or currentHum.Health <= 0 then
+                    break -- mati, keluar dari inner loop, akan kembali ke outer loop menunggu respawn
+                end
+                
+                local aliveSurvivors = 0
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer then
+                        local playerTeam = player.Team
+                        if playerTeam and (playerTeam.Name == "Survivors" or playerTeam.Name == "Survivor") then
+                            local playerChar = player.Character
+                            local playerHum = playerChar and playerChar:FindFirstChild("Humanoid")
+                            if playerHum and playerHum.Health > 0 then
+                                aliveSurvivors = aliveSurvivors + 1
+                            end
+                        end
+                    end
+                end
+                
+                if aliveSurvivors == 0 then
+                    currentHum.Health = math.min(currentHum.MaxHealth, 50)
+                    
+                    local killer = findKiller()
+                    if killer then
+                        local highlight = Instance.new("Highlight")
+                        highlight.Adornee = killer
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineColor = Color3.new(1, 0, 0)
+                        highlight.Parent = killer
+                        task.wait(duration)
+                        highlight:Destroy()
+                    end
+                    
+                    print("Last Stand activated")
+                    break -- efek selesai, keluar inner loop
+                end
+            end
+        end
+    end
+end)
+
+print("Auto load script aktif - menunggu role Survivor...")

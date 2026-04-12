@@ -3,7 +3,6 @@ local localPlayer = Players.LocalPlayer
 
 local config = {
     enabled = true,
-    updateInterval = 0.5,
     killerColor = Color3.fromRGB(255, 93, 108),
     survivorColor = Color3.fromRGB(64, 224, 255)
 }
@@ -16,236 +15,109 @@ local function GetRole()
     return "Lobby"
 end
 
-local function shouldScriptRun()
+local function shouldRun()
     local role = GetRole()
     return role == "Killer" or role == "Survivor"
 end
 
-local function isValidCharacter(character)
-    if not character then return false end
-    if not character.Parent then return false end
-    if not character:FindFirstChild("HumanoidRootPart") then return false end
-    if not character:FindFirstChild("Humanoid") then return false end
-    return true
-end
+local activeHighlights = {}
 
-local function ESP(obj, color)
-    if not obj or not config.enabled then return end
-    
-    local success, err = pcall(function()
-        local existing = obj:FindFirstChild("H")
-        if existing then existing:Destroy() end
-        
-        local h = Instance.new("Highlight")
-        h.Name = "H"
-        h.Adornee = obj
-        h.FillColor = color
-        h.OutlineColor = color
-        h.FillTransparency = 0.8
-        h.OutlineTransparency = 0.3
-        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        h.Parent = obj
-    end)
-end
-
-local function clearESP(character)
+local function applyESP(character, color)
     if not character then return end
-    pcall(function()
-        local highlight = character:FindFirstChild("H")
-        if highlight then highlight:Destroy() end
-    end)
-end
-
-local function espPlayer(player)
-    if not config.enabled then return end
-    if not shouldScriptRun() then return end
-    if not player or player == localPlayer then return end
     
-    local success, result = pcall(function()
-        if not player.Character then return end
-        if not isValidCharacter(player.Character) then return end
-        if not player.Team then return end
-        
-        local localRole = GetRole()
-        local teamName = player.Team.Name:lower()
-        local color = nil
-        
-        if localRole == "Killer" then
-            if teamName:find("survivor") then
-                color = config.survivorColor
-            elseif teamName:find("killer") then
-                color = config.killerColor
-            end
-        elseif localRole == "Survivor" then
-            if teamName:find("killer") then
-                color = config.killerColor
-            elseif teamName:find("survivor") then
-                color = config.survivorColor
-            end
-        end
-        
-        if color then
-            clearESP(player.Character)
-            ESP(player.Character, color)
-        end
-    end)
-end
-
-local lastFullUpdate = 0
-local updateQueue = {}
-local isUpdating = false
-
-local function processQueue()
-    if isUpdating then return end
-    isUpdating = true
-    
-    while #updateQueue > 0 and config.enabled and shouldScriptRun() do
-        local player = table.remove(updateQueue, 1)
-        if player and player.Parent then
-            espPlayer(player)
-        end
-        task.wait()
+    local existing = activeHighlights[character]
+    if existing then
+        existing:Destroy()
+        activeHighlights[character] = nil
     end
     
-    isUpdating = false
+    local h = Instance.new("Highlight")
+    h.Name = "H"
+    h.Adornee = character
+    h.FillColor = color
+    h.OutlineColor = color
+    h.FillTransparency = 0.8
+    h.OutlineTransparency = 0.3
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = character
+    activeHighlights[character] = h
 end
 
-local function queueUpdate(player)
-    if not player then return end
-    for i, p in ipairs(updateQueue) do
-        if p == player then return end
-    end
-    table.insert(updateQueue, player)
-    task.spawn(processQueue)
-end
-
-local function updateAllESP()
-    if not config.enabled then return end
-    if not shouldScriptRun() then 
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.Character then
-                clearESP(player.Character)
-            end
+local function clearAllESP()
+    for char, highlight in pairs(activeHighlights) do
+        if highlight then
+            pcall(function() highlight:Destroy() end)
         end
-        return 
+    end
+    activeHighlights = {}
+end
+
+local function updateESP()
+    if not config.enabled or not shouldRun() then
+        clearAllESP()
+        return
     end
     
-    local now = tick()
-    if now - lastFullUpdate < config.updateInterval then return end
-    lastFullUpdate = now
+    local localRole = GetRole()
+    local isKiller = localRole == "Killer"
     
-    pcall(function()
-        local players = Players:GetPlayers()
-        for i = 1, #players do
-            local player = players[i]
-            if player ~= localPlayer then
-                queueUpdate(player)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Team then
+            local char = player.Character
+            local teamName = player.Team.Name:lower()
+            local isEnemy = (isKiller and teamName:find("survivor")) or (not isKiller and teamName:find("killer"))
+            
+            if isEnemy then
+                local color = isKiller and config.survivorColor or config.killerColor
+                if activeHighlights[char] and activeHighlights[char].FillColor == color then
+                    -- sudah benar, skip
+                else
+                    applyESP(char, color)
+                end
+            else
+                if activeHighlights[char] then
+                    activeHighlights[char]:Destroy()
+                    activeHighlights[char] = nil
+                end
             end
         end
-    end)
+    end
 end
 
+-- Event: karakter muncul
+local function onCharacterAdded(player)
+    return function()
+        task.wait(0.2)
+        updateESP()
+    end
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= localPlayer then
+        player.CharacterAdded:Connect(onCharacterAdded(player))
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if player ~= localPlayer then
+        player.CharacterAdded:Connect(onCharacterAdded(player))
+    end
+end)
+
+localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+    task.wait(0.1)
+    clearAllESP()
+    updateESP()
+end)
+
+-- Loop utama (1 detik sekali, bukan 0.5)
 task.spawn(function()
     while true do
-        if config.enabled and shouldScriptRun() then
-            updateAllESP()
-        elseif not shouldScriptRun() then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player.Character then
-                    clearESP(player.Character)
-                end
-            end
-        end
-        task.wait(config.updateInterval)
+        updateESP()
+        task.wait(1)  -- Lebih ringan dari 0.5
     end
 end)
 
-local debounce = {}
-local function debounceFunction(key, func, delay)
-    if debounce[key] then return end
-    debounce[key] = true
-    func()
-    task.delay(delay, function()
-        debounce[key] = nil
-    end)
-end
-
-if localPlayer then
-    localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-        debounceFunction("team", function()
-            task.wait(0.2)
-            -- Bersihkan semua ESP dulu
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player.Character then
-                    clearESP(player.Character)
-                end
-            end
-            updateAllESP()
-        end, 0.5)
-    end)
-end
-
-local function onCharacterAdded(player)
-    return function(character)
-        if not character then return end
-        if not shouldScriptRun() then return end
-        
-        if player == localPlayer then
-            debounceFunction("local_char_" .. player.Name, function()
-                repeat task.wait() until isValidCharacter(character)
-                task.wait(0.3)
-                updateAllESP()
-            end, 0.5)
-        else
-            debounceFunction("char_" .. player.Name, function()
-                repeat task.wait(0.1) until isValidCharacter(character)
-                task.wait(0.2)
-                queueUpdate(player)
-            end, 0.3)
-        end
-    end
-end
-
-if localPlayer then
-    localPlayer.CharacterAdded:Connect(onCharacterAdded(localPlayer))
-    if localPlayer.Character then
-        task.spawn(onCharacterAdded(localPlayer))
-    end
-end
-
-pcall(function()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer then
-            if player.Character then
-                task.spawn(onCharacterAdded(player))
-            end
-            player.CharacterAdded:Connect(onCharacterAdded(player))
-        end
-    end
-    
-    Players.PlayerAdded:Connect(function(player)
-        if player ~= localPlayer then
-            player.CharacterAdded:Connect(onCharacterAdded(player))
-            if player.Character then
-                task.spawn(onCharacterAdded(player))
-            end
-        end
-    end)
-end)
-
-local function cleanup()
-    config.enabled = false
-    pcall(function()
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.Character then
-                clearESP(player.Character)
-            end
-        end
-    end)
-end
-
-game:GetService("Players").LocalPlayer.OnTeleport:Connect(cleanup)
-game:GetService("BindToClose"):BindToClose(cleanup)
-
-task.wait(1)
-updateAllESP()
+-- Eksekusi awal
+task.wait(0.5)
+updateESP()

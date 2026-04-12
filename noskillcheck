@@ -8,9 +8,6 @@ if not remotesFolder then return end
 local targetEvents = {}
 local blockedRemotes = {}
 
-local lastReload = 0
-local lastChildAdded = 0
-
 local function cacheTargetEvents()
     targetEvents = {}
     local targets = {
@@ -114,7 +111,7 @@ local function watchForReload()
     local playerGui = player:FindFirstChild("PlayerGui")
     if playerGui then
         playerGui.DescendantAdded:Connect(function(desc)
-            task.wait(0.5)
+            wait(0.5)
             if desc:IsA("Frame") or desc:IsA("ScreenGui") or desc:IsA("ImageLabel") then
                 removeSkillCheckUI()
                 cacheTargetEvents()
@@ -124,22 +121,15 @@ local function watchForReload()
     end
     
     replicatedStorage.ChildAdded:Connect(function()
-        local now = tick()
-        if now - lastChildAdded < 0.3 then return end
-        lastChildAdded = now
-        task.wait(0.3)
+        wait(0.3)
         shutdownSpecificRemotes()
         autoCompleteWhenNeeded()
     end)
     
     replicatedStorage.DescendantAdded:Connect(function(desc)
-        local now = tick()
-        if now - lastReload < 0.3 then return end
-        lastReload = now
-        
         if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
             if desc.Name:find("SkillCheck") or desc.Name:find("SkillCheckEvent") then
-                task.wait(0.2)
+                wait(0.2)
                 shutdownSpecificRemotes()
                 autoCompleteWhenNeeded()
             end

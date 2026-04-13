@@ -1,0 +1,122 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local Hook = {
+    Objects = {
+        ["Generator"] = {Color = Color3.fromRGB(210, 87, 255), On = true}
+    }
+}
+
+local folder = {
+    ["Generator"] = workspace.Map
+}
+
+-- Fungsi ESP
+local function ESP(obj, color)
+    if obj:FindFirstChild("H") then return end
+    local h = Instance.new("Highlight")
+    h.Name = "H"
+    h.Adornee = obj
+    h.FillColor = color
+    h.OutlineColor = color
+    h.FillTransparency = 0.8
+    h.OutlineTransparency = 0.3
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = obj
+end
+
+local function RemoveESP(obj)
+    local h = obj:FindFirstChild("H")
+    if h then h:Destroy() end
+end
+
+local function RefreshESP()
+    for t, f in pairs(folder) do
+        for _, obj in ipairs(f:GetDescendants()) do
+            if obj.Name == t then
+                if Hook.Objects[t].On then
+                    ESP(obj, Hook.Objects[t].Color)
+                else
+                    RemoveESP(obj)
+                end
+            end
+        end
+    end
+end
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "DragESP"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 200, 0, 100)
+MainFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.Text = "ESP Control"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 80, 0, 40)
+ToggleButton.Position = UDim2.new(0.5, -40, 0.5, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+ToggleButton.Text = "ON"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextScaled = true
+ToggleButton.Parent = MainFrame
+
+local UICornerBtn = Instance.new("UICorner")
+UICornerBtn.CornerRadius = UDim.new(0, 6)
+UICornerBtn.Parent = ToggleButton
+
+-- Fungsi toggle
+ToggleButton.MouseButton1Click:Connect(function()
+    for t, v in pairs(Hook.Objects) do
+        v.On = not v.On
+    end
+    if Hook.Objects.Generator.On then
+        ToggleButton.Text = "ON"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    else
+        ToggleButton.Text = "OFF"
+        ToggleButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+    end
+    RefreshESP()
+end)
+
+-- Set awal tampilan tombol
+if Hook.Objects.Generator.On then
+    ToggleButton.Text = "ON"
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+else
+    ToggleButton.Text = "OFF"
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+end
+
+RefreshESP()
+
+-- Deteksi objek baru (opsional)
+folder.Generator.DescendantAdded:Connect(function(obj)
+    if obj.Name == "Generator" and Hook.Objects.Generator.On then
+        ESP(obj, Hook.Objects.Generator.Color)
+    end
+end)

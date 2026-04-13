@@ -1,18 +1,12 @@
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local localPlayer = Players.LocalPlayer
 
-local Config = {
-    ESP = {
-        Enabled = true,
-        Players = {
-            ["Killer"] = {Color = Color3.fromRGB(255, 93, 108)},
-            ["Survivor"] = {Color = Color3.fromRGB(64, 224, 255)}
-        }
+local Hook = {
+    Players = {
+        ["Killer"] = {Color = Color3.fromRGB(255, 93, 108), On = true},
+        ["Survivor"] = {Color = Color3.fromRGB(64, 224, 255), On = true}
     }
 }
-
-local activeHighlights = {}
 
 local function GetRole()
     if not localPlayer.Team then return "Unknown" end
@@ -22,131 +16,90 @@ local function GetRole()
     return "Lobby"
 end
 
-local function IsESPAllowed()
-    local role = GetRole()
-    return role == "Killer" or role == "Survivor"
-end
-
-local function ShouldShowESP(targetPlayer)
-    local localRole = GetRole()
-    if localRole == "Unknown" or localRole == "Lobby" then return false end
-    if not targetPlayer.Team then return false end
-    if targetPlayer == localPlayer then return false end
-    
-    return true
-end
-
-local function GetESPColor(targetPlayer)
-    local targetTeam = targetPlayer.Team.Name
-    if targetTeam == "Killer" then
-        return Config.ESP.Players["Killer"].Color
-    else
-        return Config.ESP.Players["Survivor"].Color
-    end
-end
-
-UserInputService.InputBegan:Connect(function(input, processed)
-    if not processed and input.KeyCode == Enum.KeyCode.V then
-        Config.ESP.Enabled = not Config.ESP.Enabled
-        
-        for _, highlight in pairs(activeHighlights) do
-            if highlight and highlight.Parent then
-                highlight.Enabled = Config.ESP.Enabled and IsESPAllowed()
-            end
-        end
-    end
-end)
-
-local function ApplyHighlight(obj, color)
-    if not obj then return end
-    
-    local existing = obj:FindFirstChild("RxmmyESP")
-    if existing then
-        activeHighlights[obj] = nil
-        existing:Destroy()
-    end
-    
+local function ESP(obj, color)
+    if obj:FindFirstChild("H") then return end
     local h = Instance.new("Highlight")
-    h.Name = "RxmmyESP"
+    h.Name = "H"
     h.Adornee = obj
     h.FillColor = color
     h.OutlineColor = color
     h.FillTransparency = 0.8
-    h.OutlineTransparency = 0.3
+    h.OutlineTransparency = 0.38
     h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    h.Enabled = Config.ESP.Enabled and IsESPAllowed()
     h.Parent = obj
-    
-    activeHighlights[obj] = h
-    
-    obj.AncestryChanged:Connect(function()
-        if not obj.Parent then
-            activeHighlights[obj] = nil
-        end
-    end)
 end
 
-local function UpdateAllESP()
-    if not Config.ESP.Enabled or not IsESPAllowed() then
-        for obj, highlight in pairs(activeHighlights) do
+local function removeAllESP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then
+            local highlight = p.Character:FindFirstChild("H")
             if highlight then
-                pcall(function() highlight:Destroy() end)
+                highlight:Destroy()
             end
         end
-        activeHighlights = {}
+    end
+end
+
+local function updateESP()
+    local myRole = GetRole()
+    if myRole ~= "Survivor" and myRole ~= "Killer" then
+        removeAllESP()
         return
     end
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= localPlayer and p.Character and p.Team then
-            if ShouldShowESP(p) then
-                local color = GetESPColor(p)
-                ApplyHighlight(p.Character, color)
-            else
-                if p.Character then
-                    local existing = p.Character:FindFirstChild("RxmmyESP")
-                    if existing then
-                        activeHighlights[p.Character] = nil
-                        existing:Destroy()
-                    end
-                end
+            if p.Team.Name == "Killer" and Hook.Players["Killer"].On then
+                ESP(p.Character, Hook.Players["Killer"].Color)
+            elseif p.Team.Name == "Survivors" and Hook.Players["Survivor"].On then
+                ESP(p.Character, Hook.Players["Survivor"].Color)
             end
         end
     end
 end
 
-local function SetupPlayerESP(p)
-    if p == localPlayer then return end
-    
-    p.CharacterAdded:Connect(function()
-        task.wait(0.3)
-        UpdateAllESP()
-    end)
-end
-
-localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-    task.wait(0.2)
-    for obj, highlight in pairs(activeHighlights) do
-        if highlight then
-            pcall(function() highlight:Destroy() end)
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= localPlayer and p.Character and p.Team then
+        if p.Team.Name == "Killer" then
+            ESP(p.Character, Hook.Players["Killer"].Color)
+        elseif p.Team.Name == "Survivors" then
+            ESP(p.Character, Hook.Players["Survivor"].Color)
         end
     end
-    activeHighlights = {}
-    UpdateAllESP()
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if player ~= localPlayer then
+        player.CharacterAdded:Connect(function(character)
+            task.wait(0.3)
+            if player.Team then
+                if player.Team.Name == "Killer" then
+                    ESP(character, Hook.Players["Killer"].Color)
+                elseif player.Team.Name == "Survivors" then
+                    ESP(character, Hook.Players["Survivor"].Color)
+                end
+            end
+        end)
+    end
 end)
 
-task.spawn(function()
-    while true do
-        UpdateAllESP()
-        task.wait(0.5)
-    end
+localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+    updateESP()
+end)
+
+Players.PlayerAdded:Connect(function()
+    task.wait(0.3)
+    updateESP()
 end)
 
 for _, p in ipairs(Players:GetPlayers()) do
-    SetupPlayerESP(p)
+    if p ~= localPlayer then
+        p.CharacterAdded:Connect(function()
+            task.wait(0.3)
+            updateESP()
+        end)
+    end
 end
 
-Players.PlayerAdded:Connect(SetupPlayerESP)
-
-task.wait(0.5)
-UpdateAllESP()
+task.wait(0.3)
+updateESP()

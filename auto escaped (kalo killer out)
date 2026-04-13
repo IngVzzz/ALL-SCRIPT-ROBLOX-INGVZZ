@@ -1,0 +1,106 @@
+-- Auto Escaped by Cat-GPT (Final Version)
+-- Deteksi killer leave -> auto escaped via remote
+-- Berhasil memicu Remotes.Exit.LeverEvent
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function GetRole()
+    if not LocalPlayer.Team then return "Unknown" end
+    local name = LocalPlayer.Team.Name
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" then return "Survivor" end
+    return "Lobby"
+end
+
+local function getKiller()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local team = player.Team
+            if team and team.Name == "Killer" then
+                return player
+            end
+        end
+    end
+    return nil
+end
+
+local function forceEscape()
+    local success = false
+    
+    -- Jalur remote yang diketahui berhasil
+    local remotePaths = {
+        {"Remotes", "Exit", "LeverEvent"},
+        {"Remotes", "Exit", "gate"},
+        {"Remotes", "LeverEvent"},
+        {"Exit", "LeverEvent"}
+    }
+    
+    for _, path in ipairs(remotePaths) do
+        local obj = ReplicatedStorage
+        for _, name in ipairs(path) do
+            obj = obj and obj:FindFirstChild(name)
+            if not obj then break end
+        end
+        if obj and (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) then
+            pcall(function()
+                obj:FireServer()
+                print("[Auto-Escaped] Fired:", table.concat(path, "."))
+                success = true
+            end)
+        end
+    end
+    
+    -- Fallback: brute force semua remote jika di atas gagal
+    if not success then
+        for _, child in ipairs(ReplicatedStorage:GetChildren()) do
+            if child:IsA("RemoteEvent") then
+                pcall(function() child:FireServer() end)
+                print("[Auto-Escaped] Brute force fired:", child.Name)
+            end
+        end
+    end
+    
+    if success then
+        print("[Auto-Escaped] You escaped.")
+    else
+        print("[Auto-Escaped] No remote found.")
+    end
+end
+
+-- Setup deteksi
+local function startDetection()
+    local killer = getKiller()
+    
+    if killer then
+        Players.PlayerRemoving:Connect(function(player)
+            if GetRole() == "Survivor" and player == killer then
+                forceEscape()
+            end
+        end)
+    end
+end
+
+-- Loop fallback pengecekan
+spawn(function()
+    while wait(2) do
+        if GetRole() == "Survivor" then
+            local currentKiller = getKiller()
+            if not currentKiller then
+                forceEscape()
+                break
+            end
+        end
+    end
+end)
+
+-- Auto restart saat character berubah (respawn/cutscene)
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(1)
+    startDetection()
+end)
+
+-- Start
+startDetection()
+print("[Auto-Escaped] Final script loaded. Ready.")

@@ -1,0 +1,32 @@
+local Hook = {
+    Objects = {
+        ["Pallet"] = {Color = Color3.fromRGB(255, 165, 0), On = true},
+        ["Window"] = {Color = Color3.fromRGB(255, 165, 0), On = true}
+    }
+}
+
+local folder = {
+    ["Pallet"] = workspace.Map,
+    ["Window"] = workspace.Map,
+}
+
+local function ESP(obj, color)
+    if obj:FindFirstChild("H") then return end
+    local h = Instance.new("Highlight")
+    h.Name = "H"
+    h.Adornee = obj
+    h.FillColor = color
+    h.OutlineColor = color
+    h.FillTransparency = 0.8
+    h.OutlineTransparency = 0.38
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = obj
+end
+
+for t, f in pairs(folder) do
+    for _, obj in ipairs(f:GetDescendants()) do
+        if obj.Name == (t == "Pallet" and "Palletwrong" or t) then
+            ESP(obj, Hook.Objects[t].Color)
+        end
+    end
+end

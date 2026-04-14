@@ -1,0 +1,84 @@
+--[[
+    Script: Disable SkillCheckEvent - Healing & Generator
+    Fitur: Menghancurkan skillcheck untuk kedua aktivitas
+    Stabil & Ringan, tanpa FPS drop
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local destroyedRemotes = {
+    Healing = false,
+    Generator = false
+}
+
+-- Fungsi penghancur universal
+local function DisableSkillCheckEvent(folderName)
+    if destroyedRemotes[folderName] then return true end
+    
+    local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if not Remotes then return false end
+    
+    local targetFolder = Remotes:FindFirstChild(folderName)
+    if not targetFolder then return false end
+    
+    local SkillCheckEvent = targetFolder:FindFirstChild("SkillCheckEvent")
+    if not SkillCheckEvent then return false end
+    
+    SkillCheckEvent:Destroy()
+    destroyedRemotes[folderName] = true
+    print(folderName .. " - SkillCheckEvent dihancurkan")
+    return true
+end
+
+-- Hancurkan keduanya
+local function DestroyBoth()
+    destroyedRemotes.Healing = false
+    destroyedRemotes.Generator = false
+    DisableSkillCheckEvent("Healing")
+    DisableSkillCheckEvent("Generator")
+end
+
+-- Deteksi cutscene
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+playerGui.ChildAdded:Connect(function(gui)
+    if gui:IsA("ScreenGui") then
+        local name = gui.Name:lower()
+        if name:find("cutscene") or name:find("intro") or name:find("cinematic") or name:find("round") then
+            task.wait(0.3)
+            DestroyBoth()
+            gui:Destroy()
+        end
+    end
+end)
+
+-- Reset saat karakter respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    DestroyBoth()
+end)
+
+-- Pantau jika remote dibuat ulang
+local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if remotes then
+    remotes.ChildAdded:Connect(function(child)
+        if child.Name == "Healing" or child.Name == "Generator" then
+            task.wait(0.1)
+            DisableSkillCheckEvent(child.Name)
+            
+            child.ChildAdded:Connect(function(grandChild)
+                if grandChild.Name == "SkillCheckEvent" then
+                    grandChild:Destroy()
+                    print(child.Name .. " - SkillCheckEvent baru langsung dihancurkan")
+                end
+            end)
+        end
+    end)
+end
+
+-- Eksekusi pertama
+DestroyBoth()
+
+print("SkillCheck Healing DAN Generator nonaktif permanen - FPS aman")

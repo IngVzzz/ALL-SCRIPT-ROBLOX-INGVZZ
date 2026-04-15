@@ -114,7 +114,7 @@ end
 
 RefreshESP()
 
--- Deteksi objek baru (opsional)
+-- Deteksi objek baru 
 folder.Generator.DescendantAdded:Connect(function(obj)
     if obj.Name == "Generator" and Hook.Objects.Generator.On then
         ESP(obj, Hook.Objects.Generator.Color)

@@ -29,7 +29,7 @@ end)
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Size = UDim2.new(0, 45, 0, 45)
-toggleButton.Position = UDim2.new(1, -60, 1, -110)
+toggleButton.Position = UDim2.new(1, -40, 1, -140)
 toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 toggleButton.Text = "R"
 toggleButton.TextColor3 = Color3.new(1, 1, 1)
@@ -54,7 +54,6 @@ local function updateGUIVisibility()
             moonwalk = false
             humanoid.AutoRotate = true
             toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-            toggleButton.Text = "R"
         end
     end
 end
@@ -69,26 +68,37 @@ local function setYaw(cf, yaw)
     return CFrame.new(pos) * CFrame.Angles(0, math.rad(yaw), 0)
 end
 
-local function toggleMoonwalk()
-    if GetRole() ~= "Survivor" then
-        return
-    end
-    
-    moonwalk = not moonwalk
-    if moonwalk then
+-- Aktifkan moonwalk (tombol R ditahan)
+local function startMoonwalk()
+    if GetRole() ~= "Survivor" then return end
+    if not moonwalk then
+        moonwalk = true
         humanoid.AutoRotate = false
         baseYaw = getYaw(root.CFrame)
         currentYaw = baseYaw
         toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        toggleButton.Text = "L"
-    else
-        humanoid.AutoRotate = true
-        toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        toggleButton.Text = "R"
+        -- Teks tetap "R"
     end
 end
 
-toggleButton.MouseButton1Click:Connect(toggleMoonwalk)
+-- Nonaktifkan moonwalk (tombol R dilepas)
+local function stopMoonwalk()
+    if moonwalk then
+        moonwalk = false
+        humanoid.AutoRotate = true
+        toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        turningLeft = false
+        turningRight = false
+    end
+end
+
+-- Event HOLD untuk tombol R
+toggleButton.MouseButton1Down:Connect(startMoonwalk)
+toggleButton.MouseButton1Up:Connect(stopMoonwalk)
+
+-- Support touch/mobile
+toggleButton.TouchBegan:Connect(startMoonwalk)
+toggleButton.TouchEnded:Connect(stopMoonwalk)
 
 UIS.InputBegan:Connect(function(input)
     if not moonwalk or GetRole() ~= "Survivor" then return end

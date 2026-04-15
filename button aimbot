@@ -1,7 +1,3 @@
--- Cat-GPT | Aimbot + Kamera Survivor | Violence District
--- Saat aimbot ON: kamera perspektif Survivor
--- Saat aimbot OFF: kamera balik ke default Killer
-
 local aimbotEnabled = false
 local currentTarget = nil
 local maxLockDistance = 35
@@ -10,18 +6,9 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local Camera = workspace.CurrentCamera
 local UserInputService = game:GetService("UserInputService")
+
 local LocalPlayer = Players.LocalPlayer
 
--- Variabel untuk kamera Survivor
-local survivorCamActive = false
-local cameraAngleX = 0
-local cameraAngleY = 20
-local isMousePressed = false
-local SURVIVOR_OFFSET = Vector3.new(1.5, 1.5, 4.5)
-local HEIGHT_OFFSET = 1.2
-local renderStepConnection = nil
-
--- Fungsi mendapatkan role
 local function GetRole()
     if not LocalPlayer.Team then return "Unknown" end
     local name = LocalPlayer.Team.Name
@@ -30,7 +17,6 @@ local function GetRole()
     return "Lobby"
 end
 
--- Fungsi mouse lock untuk aimbot
 local function lockMouse()
     UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
     UserInputService.MouseIconEnabled = false
@@ -41,109 +27,11 @@ local function unlockMouse()
     UserInputService.MouseIconEnabled = true
 end
 
--- ========== KAMERA SURVIVOR (Override) ==========
-local function enableSurvivorCamera()
-    if survivorCamActive then return end
-    survivorCamActive = true
-    
-    -- Reset sudut kamera
-    cameraAngleX = 0
-    cameraAngleY = 20
-    
-    -- Ubah pengaturan kamera
-    Camera.CameraType = Enum.CameraType.Custom
-    Camera.FieldOfView = 75
-    LocalPlayer.CameraMode = Enum.CameraMode.Classic
-    
-    -- Fungsi update kamera setiap frame
-    local function updateSurvivorCamera()
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local head = character:FindFirstChild("Head")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if not (head and rootPart) then return end
-        
-        local targetPosition = head.Position + Vector3.new(0, HEIGHT_OFFSET, 0)
-        
-        local yawRad = math.rad(cameraAngleX)
-        local pitchRad = math.rad(cameraAngleY)
-        local rotation = CFrame.new() * CFrame.Angles(0, yawRad, 0) * CFrame.Angles(pitchRad, 0, 0)
-        local offsetVector = rotation:VectorToWorldSpace(SURVIVOR_OFFSET)
-        local cameraPosition = targetPosition + offsetVector
-        local lookAtTarget = targetPosition + Vector3.new(0, -0.5, 0)
-        
-        Camera.CFrame = CFrame.new(cameraPosition, lookAtTarget)
-    end
-    
-    -- Hentikan render step sebelumnya jika ada
-    if renderStepConnection then renderStepConnection:Disconnect() end
-    
-    renderStepConnection = RunService.RenderStepped:Connect(updateSurvivorCamera)
-    
-    -- Aktifkan kontrol mouse untuk kamera Survivor
-    local mouseInputBegan, mouseInputEnded, mouseInputChanged
-    
-    mouseInputBegan = UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            isMousePressed = true
-        end
-    end)
-    
-    mouseInputEnded = UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            isMousePressed = false
-        end
-    end)
-    
-    mouseInputChanged = UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and isMousePressed then
-            cameraAngleX = cameraAngleX - input.Delta.X * 0.3
-            cameraAngleY = math.clamp(cameraAngleY - input.Delta.Y * 0.3, -30, 60)
-        end
-    end)
-    
-    -- Simpan koneksi untuk dimatikan nanti
-    renderStepConnection._mouseBegan = mouseInputBegan
-    renderStepConnection._mouseEnded = mouseInputEnded
-    renderStepConnection._mouseChanged = mouseInputChanged
-    
-    print("[Cat-GPT] Kamera Survivor AKTIF")
-end
-
-local function disableSurvivorCamera()
-    if not survivorCamActive then return end
-    survivorCamActive = false
-    
-    -- Matikan render step
-    if renderStepConnection then
-        if renderStepConnection._mouseBegan then renderStepConnection._mouseBegan:Disconnect() end
-        if renderStepConnection._mouseEnded then renderStepConnection._mouseEnded:Disconnect() end
-        if renderStepConnection._mouseChanged then renderStepConnection._mouseChanged:Disconnect() end
-        renderStepConnection:Disconnect()
-        renderStepConnection = nil
-    end
-    
-    -- Kembalikan kamera ke mode default
-    Camera.CameraType = Enum.CameraType.Custom
-    LocalPlayer.CameraMode = Enum.CameraMode.Classic
-    
-    -- Reset CFrame kamera ke tampilan default
-    task.wait(0.1)
-    local character = LocalPlayer.Character
-    if character and character:FindFirstChild("HumanoidRootPart") then
-        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(character.HumanoidRootPart.Position + Vector3.new(0, 2, 8), character.HumanoidRootPart.Position), 0.5)
-    end
-    
-    print("[Cat-GPT] Kamera Killer DEFAULT AKTIF")
-end
-
--- ========== AIMBOT CORE ==========
 local function getClosestTarget()
     local closestTarget = nil
     local shortestDistance = math.huge
     local screenCenter = Camera.ViewportSize / 2
-    local playerPosition = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new(0, 0, 0)
+    local playerPosition = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character["HumanoidRootPart"].Position or Vector3.new(0, 0, 0)
 
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -178,23 +66,6 @@ local function lockOnTarget()
     end
 end
 
--- Handler toggle aimbot + kamera
-local function setAimbotState(state)
-    aimbotEnabled = state
-    
-    if aimbotEnabled then
-        -- Aimbot ON: kamera Survivor aktif
-        lockMouse()
-        enableSurvivorCamera()
-    else
-        -- Aimbot OFF: kamera balik ke default Killer
-        unlockMouse()
-        disableSurvivorCamera()
-        currentTarget = nil
-    end
-end
-
--- Loop aimbot
 RunService.RenderStepped:Connect(function()
     if aimbotEnabled and GetRole() == "Killer" then
         if not currentTarget then
@@ -204,16 +75,17 @@ RunService.RenderStepped:Connect(function()
             lockOnTarget()
         end
     elseif aimbotEnabled and GetRole() ~= "Killer" then
-        setAimbotState(false)
+        aimbotEnabled = false
         if button then
             button.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
             button.BackgroundTransparency = 0.15
             stroke.Color = Color3.fromRGB(255, 100, 100)
         end
+        unlockMouse()
+        currentTarget = nil
     end
 end)
 
--- ========== GUI ==========
 local button = nil
 local stroke = nil
 local ScreenGui = nil
@@ -225,7 +97,9 @@ local function updateGUIVisibility()
         else
             ScreenGui.Enabled = false
             if aimbotEnabled then
-                setAimbotState(false)
+                aimbotEnabled = false
+                unlockMouse()
+                currentTarget = nil
             end
         end
     end
@@ -293,17 +167,19 @@ local function createGUI()
     button.MouseButton1Click:Connect(function()
         if not dragging then
             if GetRole() == "Killer" then
-                local newState = not aimbotEnabled
-                setAimbotState(newState)
+                aimbotEnabled = not aimbotEnabled
                 
-                if newState then
+                if aimbotEnabled then
                     button.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
                     button.BackgroundTransparency = 0.3
                     stroke.Color = Color3.fromRGB(100, 255, 100)
+                    lockMouse()
                 else
                     button.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
                     button.BackgroundTransparency = 0.15
                     stroke.Color = Color3.fromRGB(255, 100, 100)
+                    unlockMouse()
+                    currentTarget = nil
                 end
             else
                 button.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
@@ -315,7 +191,6 @@ local function createGUI()
     end)
 end
 
--- Inisialisasi
 createGUI()
 updateGUIVisibility()
 
@@ -325,10 +200,4 @@ Players.LocalPlayer.CharacterAdded:Connect(function()
     if not aimbotEnabled then
         unlockMouse()
     end
-    -- Jika aimbot mati, pastikan kamera default
-    if not aimbotEnabled and survivorCamActive then
-        disableSurvivorCamera()
-    end
 end)
-
-print("[Cat-GPT] Script siap. Klik tombol untuk toggle aimbot + kamera Survivor.")

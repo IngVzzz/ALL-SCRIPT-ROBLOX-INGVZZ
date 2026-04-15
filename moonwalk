@@ -3,6 +3,14 @@ local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
+local char = player.Character or player.CharacterAdded:Wait()
+local humanoid = char:WaitForChild("Humanoid")
+local root = char:WaitForChild("HumanoidRootPart")
+
+local currentGui = nil
+local button = nil
+
+-- Fungsi GetRole (hanya berfungsi saat Survivor)
 local function GetRole()
     if not player.Team then return "Unknown" end
     local name = player.Team.Name
@@ -11,32 +19,7 @@ local function GetRole()
     return "Lobby"
 end
 
-local char = player.Character or player.CharacterAdded:Wait()
-local humanoid = char:WaitForChild("Humanoid")
-local root = char:WaitForChild("HumanoidRootPart")
-
-local gui = Instance.new("ScreenGui")
-gui.Name = "MoonwalkController"
-gui.IgnoreGuiInset = true
-gui.ResetOnSpawn = false
-gui.Parent = CoreGui
-
-gui.AncestryChanged:Connect(function(_, parent)
-    if parent == nil then
-        gui.Parent = CoreGui
-    end
-end)
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 45, 0, 45)
-toggleButton.Position = UDim2.new(1, -40, 1, -140)
-toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-toggleButton.Text = "R"
-toggleButton.TextColor3 = Color3.new(1, 1, 1)
-toggleButton.TextScaled = true
-toggleButton.BorderSizePixel = 0
-toggleButton.Parent = gui
-
+-- Variabel moonwalk
 local moonwalk = false
 local baseYaw = 0
 local currentYaw = 0
@@ -44,19 +27,6 @@ local maxTurn = 40
 local turnSpeed = 850
 local returnSpeed = 800
 local turningLeft, turningRight = false, false
-
-local function updateGUIVisibility()
-    if GetRole() == "Survivor" then
-        gui.Enabled = true
-    else
-        gui.Enabled = false
-        if moonwalk then
-            moonwalk = false
-            humanoid.AutoRotate = true
-            toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        end
-    end
-end
 
 local function getYaw(cf)
     local _, y, _ = cf:ToEulerAnglesYXZ()
@@ -68,40 +38,82 @@ local function setYaw(cf, yaw)
     return CFrame.new(pos) * CFrame.Angles(0, math.rad(yaw), 0)
 end
 
--- Aktifkan moonwalk (tombol R ditahan)
-local function startMoonwalk()
+local function enableMoonwalk()
     if GetRole() ~= "Survivor" then return end
-    if not moonwalk then
-        moonwalk = true
-        humanoid.AutoRotate = false
-        baseYaw = getYaw(root.CFrame)
-        currentYaw = baseYaw
-        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-        -- Teks tetap "R"
+    moonwalk = true
+    humanoid.AutoRotate = false
+    baseYaw = getYaw(root.CFrame)
+    currentYaw = baseYaw
+    if button then
+        button.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
     end
 end
 
--- Nonaktifkan moonwalk (tombol R dilepas)
-local function stopMoonwalk()
-    if moonwalk then
-        moonwalk = false
-        humanoid.AutoRotate = true
-        toggleButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-        turningLeft = false
-        turningRight = false
+local function disableMoonwalk()
+    moonwalk = false
+    humanoid.AutoRotate = true
+    if button then
+        button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    end
+    turningLeft = false
+    turningRight = false
+end
+
+-- Fungsi destroy GUI
+local function destroyGUI()
+    if currentGui then
+        currentGui:Destroy()
+        currentGui = nil
+        button = nil
     end
 end
 
--- Event HOLD untuk tombol R
-toggleButton.MouseButton1Down:Connect(startMoonwalk)
-toggleButton.MouseButton1Up:Connect(stopMoonwalk)
+-- Fungsi create GUI (hanya jika role Survivor)
+local function createGUI()
+    destroyGUI()
+    
+    if GetRole() ~= "Survivor" then
+        return
+    end
+    
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "MoonwalkController"
+    gui.IgnoreGuiInset = true
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+    currentGui = gui
+    
+    gui.AncestryChanged:Connect(function(_, parent)
+        if parent == nil and currentGui == gui then
+            gui.Parent = CoreGui
+        end
+    end)
+    
+    button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 45, 0, 45)
+    button.Position = UDim2.new(1, -50, 1, -110)
+    button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    button.Text = "R"
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextScaled = true
+    button.BorderSizePixel = 0
+    button.Parent = gui
+    
+    -- Tombol R: tahan untuk aktif
+    button.MouseButton1Down:Connect(enableMoonwalk)
+    button.MouseButton1Up:Connect(disableMoonwalk)
+    
+    button.TouchBegan:Connect(enableMoonwalk)
+    button.TouchEnded:Connect(disableMoonwalk)
+end
 
--- Support touch/mobile
-toggleButton.TouchBegan:Connect(startMoonwalk)
-toggleButton.TouchEnded:Connect(stopMoonwalk)
-
+-- Input handling
 UIS.InputBegan:Connect(function(input)
-    if not moonwalk or GetRole() ~= "Survivor" then return end
+    if not moonwalk then return end
+    if GetRole() ~= "Survivor" then
+        if moonwalk then disableMoonwalk() end
+        return
+    end
     if input.KeyCode == Enum.KeyCode.D then
         turningRight = true
     elseif input.KeyCode == Enum.KeyCode.A then
@@ -118,7 +130,8 @@ UIS.InputEnded:Connect(function(input)
 end)
 
 UIS.TouchMoved:Connect(function(input)
-    if not moonwalk or GetRole() ~= "Survivor" then return end
+    if not moonwalk then return end
+    if GetRole() ~= "Survivor" then return end
     if math.abs(input.Delta.X) > 3 then
         if input.Delta.X > 0 then
             turningRight = true
@@ -148,7 +161,6 @@ RunService.RenderStepped:Connect(function(dt)
                 currentYaw = math.max(currentYaw - returnSpeed * dt, baseYaw)
             end
         end
-        
         root.CFrame = setYaw(CFrame.new(root.CFrame.Position), currentYaw)
     end
 end)
@@ -157,8 +169,24 @@ player.CharacterAdded:Connect(function(newChar)
     char = newChar
     humanoid = newChar:WaitForChild("Humanoid")
     root = newChar:WaitForChild("HumanoidRootPart")
+    if moonwalk then
+        disableMoonwalk()
+    end
 end)
 
-player:GetPropertyChangedSignal("Team"):Connect(updateGUIVisibility)
+-- Deteksi perubahan role
+player:GetPropertyChangedSignal("Team"):Connect(function()
+    if GetRole() == "Survivor" then
+        if not currentGui then
+            createGUI()
+        end
+    else
+        destroyGUI()
+        if moonwalk then
+            disableMoonwalk()
+        end
+    end
+end)
 
-updateGUIVisibility()
+-- Panggil pertama kali
+createGUI()

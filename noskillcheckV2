@@ -1,0 +1,108 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local destroyedRemotes = {
+    Healing = false,
+    Generator = false
+}
+
+-- Fungsi utama penghancur SkillCheckEvent
+local function DisableSkillCheckEvent(folderName)
+    local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if not Remotes then return false end
+
+    local targetFolder = Remotes:FindFirstChild(folderName)
+    if not targetFolder then return false end
+
+    local SkillCheckEvent = targetFolder:FindFirstChild("SkillCheckEvent")
+    if SkillCheckEvent then
+        SkillCheckEvent:Destroy()
+    end
+
+    destroyedRemotes[folderName] = true
+    return true
+end
+
+-- Reset status dan hancurkan kedua remote
+local function DestroyBoth()
+    destroyedRemotes.Healing = false
+    destroyedRemotes.Generator = false
+    DisableSkillCheckEvent("Healing")
+    DisableSkillCheckEvent("Generator")
+end
+
+-- Memasang pendeteksi anak di folder target agar SkillCheckEvent langsung dihancurkan jika muncul kemudian
+local function WatchFolder(folderName)
+    local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if not Remotes then return end
+
+    local targetFolder = Remotes:FindFirstChild(folderName)
+    if not targetFolder then return end
+
+    -- Hancurkan jika sudah ada
+    local existing = targetFolder:FindFirstChild("SkillCheckEvent")
+    if existing then existing:Destroy() end
+
+    -- Pantau jika SkillCheckEvent ditambahkan kemudian
+    local conn
+    conn = targetFolder.ChildAdded:Connect(function(child)
+        if child.Name == "SkillCheckEvent" then
+            child:Destroy()
+            destroyedRemotes[folderName] = true
+        end
+    end)
+
+    -- Bersihkan koneksi jika folder dihancurkan (opsional, hindari memory leak)
+    targetFolder.AncestryChanged:Connect(function()
+        if not targetFolder.Parent then
+            conn:Disconnect()
+        end
+    end)
+end
+
+-- Pantau folder Healing dan Generator jika muncul belakangan
+local function WatchRemotesFolder()
+    local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    if not Remotes then return end
+
+    local function AddWatcher(folderName)
+        if Remotes:FindFirstChild(folderName) then
+            WatchFolder(folderName)
+        end
+    end
+
+    AddWatcher("Healing")
+    AddWatcher("Generator")
+
+    Remotes.ChildAdded:Connect(function(child)
+        if child.Name == "Healing" or child.Name == "Generator" then
+            task.wait(0.1)
+            WatchFolder(child.Name)
+            DisableSkillCheckEvent(child.Name)
+        end
+    end)
+end
+
+-- Hancurkan GUI cutscene dan reset remote
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+playerGui.ChildAdded:Connect(function(gui)
+    if gui:IsA("ScreenGui") then
+        local name = gui.Name:lower()
+        if name:find("cutscene") or name:find("intro") or name:find("cinematic") or name:find("round") then
+            task.wait(0.3)
+            DestroyBoth()
+            gui:Destroy()
+        end
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    DestroyBoth()
+end)
+
+-- Inisialisasi awal
+WatchRemotesFolder()
+DestroyBoth()

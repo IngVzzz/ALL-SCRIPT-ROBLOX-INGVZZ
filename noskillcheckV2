@@ -7,7 +7,6 @@ local destroyedRemotes = {
     Generator = false
 }
 
--- Fungsi utama penghancur SkillCheckEvent
 local function DisableSkillCheckEvent(folderName)
     local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
     if not Remotes then return false end
@@ -24,7 +23,6 @@ local function DisableSkillCheckEvent(folderName)
     return true
 end
 
--- Reset status dan hancurkan kedua remote
 local function DestroyBoth()
     destroyedRemotes.Healing = false
     destroyedRemotes.Generator = false
@@ -32,7 +30,6 @@ local function DestroyBoth()
     DisableSkillCheckEvent("Generator")
 end
 
--- Memasang pendeteksi anak di folder target agar SkillCheckEvent langsung dihancurkan jika muncul kemudian
 local function WatchFolder(folderName)
     local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
     if not Remotes then return end
@@ -40,11 +37,9 @@ local function WatchFolder(folderName)
     local targetFolder = Remotes:FindFirstChild(folderName)
     if not targetFolder then return end
 
-    -- Hancurkan jika sudah ada
     local existing = targetFolder:FindFirstChild("SkillCheckEvent")
     if existing then existing:Destroy() end
 
-    -- Pantau jika SkillCheckEvent ditambahkan kemudian
     local conn
     conn = targetFolder.ChildAdded:Connect(function(child)
         if child.Name == "SkillCheckEvent" then
@@ -53,7 +48,6 @@ local function WatchFolder(folderName)
         end
     end)
 
-    -- Bersihkan koneksi jika folder dihancurkan (opsional, hindari memory leak)
     targetFolder.AncestryChanged:Connect(function()
         if not targetFolder.Parent then
             conn:Disconnect()
@@ -61,7 +55,6 @@ local function WatchFolder(folderName)
     end)
 end
 
--- Pantau folder Healing dan Generator jika muncul belakangan
 local function WatchRemotesFolder()
     local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
     if not Remotes then return end
@@ -84,25 +77,11 @@ local function WatchRemotesFolder()
     end)
 end
 
--- Hancurkan GUI cutscene dan reset remote
-local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-
-playerGui.ChildAdded:Connect(function(gui)
-    if gui:IsA("ScreenGui") then
-        local name = gui.Name:lower()
-        if name:find("cutscene") or name:find("intro") or name:find("cinematic") or name:find("round") then
-            task.wait(0.3)
-            DestroyBoth()
-            gui:Destroy()
-        end
-    end
-end)
 
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     DestroyBoth()
 end)
 
--- Inisialisasi awal
 WatchRemotesFolder()
 DestroyBoth()

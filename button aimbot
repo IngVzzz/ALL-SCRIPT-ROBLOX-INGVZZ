@@ -90,7 +90,7 @@ local function lockOnTarget()
     if currentTarget and currentTarget.Character then
         local targetPart = currentTarget.Character:FindFirstChild("HumanoidRootPart")
         if targetPart then
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), 0.7)
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), 0.9)
         else
             currentTarget = nil
         end

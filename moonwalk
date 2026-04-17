@@ -10,13 +10,29 @@ local root = char:WaitForChild("HumanoidRootPart")
 local currentGui = nil
 local button = nil
 
--- Fungsi GetRole (hanya berfungsi saat Survivor)
+-- Cache GetRole (kurangi beban per frame)
+local cachedRole = nil
+local lastRoleCheck = 0
+
 local function GetRole()
-    if not player.Team then return "Unknown" end
-    local name = player.Team.Name
-    if name == "Killer" then return "Killer" end
-    if name == "Survivors" then return "Survivor" end
-    return "Lobby"
+    local now = tick()
+    if now - lastRoleCheck < 0.5 and cachedRole then
+        return cachedRole
+    end
+    if not player.Team then 
+        cachedRole = "Unknown"
+    else
+        local name = player.Team.Name
+        if name == "Killer" then
+            cachedRole = "Killer"
+        elseif name == "Survivors" then
+            cachedRole = "Survivor"
+        else
+            cachedRole = "Lobby"
+        end
+    end
+    lastRoleCheck = now
+    return cachedRole
 end
 
 -- Variabel moonwalk
@@ -59,7 +75,6 @@ local function disableMoonwalk()
     turningRight = false
 end
 
--- Fungsi destroy GUI
 local function destroyGUI()
     if currentGui then
         currentGui:Destroy()
@@ -68,7 +83,6 @@ local function destroyGUI()
     end
 end
 
--- Fungsi create GUI (hanya jika role Survivor)
 local function createGUI()
     destroyGUI()
     
@@ -83,12 +97,6 @@ local function createGUI()
     gui.Parent = CoreGui
     currentGui = gui
     
-    gui.AncestryChanged:Connect(function(_, parent)
-        if parent == nil and currentGui == gui then
-            gui.Parent = CoreGui
-        end
-    end)
-    
     button = Instance.new("TextButton")
     button.Size = UDim2.new(0, 45, 0, 45)
     button.Position = UDim2.new(1, -50, 1, -110)
@@ -99,10 +107,8 @@ local function createGUI()
     button.BorderSizePixel = 0
     button.Parent = gui
     
-    -- Tombol R: tahan untuk aktif
     button.MouseButton1Down:Connect(enableMoonwalk)
     button.MouseButton1Up:Connect(disableMoonwalk)
-    
     button.TouchBegan:Connect(enableMoonwalk)
     button.TouchEnded:Connect(disableMoonwalk)
 end
@@ -174,7 +180,6 @@ player.CharacterAdded:Connect(function(newChar)
     end
 end)
 
--- Deteksi perubahan role
 player:GetPropertyChangedSignal("Team"):Connect(function()
     if GetRole() == "Survivor" then
         if not currentGui then
@@ -188,5 +193,4 @@ player:GetPropertyChangedSignal("Team"):Connect(function()
     end
 end)
 
--- Panggil pertama kali
 createGUI()

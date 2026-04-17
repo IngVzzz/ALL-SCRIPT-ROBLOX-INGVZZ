@@ -9,7 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Cache untuk menghindari lookup berulang
+-- Cache role sederhana
 local cachedRole = nil
 local lastRoleCheck = 0
 
@@ -44,7 +44,6 @@ local function unlockMouse()
     UserInputService.MouseIconEnabled = true
 end
 
--- Throttle untuk pencarian target (2x per detik, bukan per frame)
 local lastTargetSearch = 0
 local function getClosestTargetThrottled()
     local now = tick()
@@ -97,7 +96,7 @@ local function lockOnTarget()
     end
 end
 
--- RenderStepped dengan throttle
+-- RenderStepped TANPA auto-reload, hanya jalan jika aimbotEnabled dan role Killer
 RunService.RenderStepped:Connect(function()
     if aimbotEnabled and GetRole() == "Killer" then
         if not currentTarget then
@@ -118,26 +117,11 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- GUI (tanpa auto-load, dibuat sekali)
 local button = nil
 local stroke = nil
 local ScreenGui = nil
 
-local function updateGUIVisibility()
-    if button and ScreenGui then
-        if GetRole() == "Killer" then
-            ScreenGui.Enabled = true
-        else
-            ScreenGui.Enabled = false
-            if aimbotEnabled then
-                aimbotEnabled = false
-                unlockMouse()
-                currentTarget = nil
-            end
-        end
-    end
-end
-
--- GUI dibuat SEKALI, tidak auto-load ulang
 if not game.CoreGui:FindFirstChild("SimpleAimbot") then
     ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "SimpleAimbot"
@@ -224,13 +208,9 @@ else
     stroke = button and button:FindFirstChildWhichIsA("UIStroke")
 end
 
-updateGUIVisibility()
-
-LocalPlayer:GetPropertyChangedSignal("Team"):Connect(updateGUIVisibility)
-
-Players.LocalPlayer.CharacterAdded:Connect(function()
-    if not aimbotEnabled then
-        unlockMouse()
-    end
-    currentTarget = nil
-end)
+-- TAMPILKAN GUI hanya jika role Killer saat execute
+if GetRole() == "Killer" then
+    ScreenGui.Enabled = true
+else
+    ScreenGui.Enabled = false
+end

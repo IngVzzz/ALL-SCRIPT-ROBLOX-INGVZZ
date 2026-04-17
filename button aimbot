@@ -9,12 +9,29 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
+-- Cache untuk menghindari lookup berulang
+local cachedRole = nil
+local lastRoleCheck = 0
+
 local function GetRole()
-    if not LocalPlayer.Team then return "Unknown" end
-    local name = LocalPlayer.Team.Name
-    if name == "Killer" then return "Killer" end
-    if name == "Survivors" then return "Survivor" end
-    return "Lobby"
+    local now = tick()
+    if now - lastRoleCheck < 0.5 and cachedRole then
+        return cachedRole
+    end
+    if not LocalPlayer.Team then 
+        cachedRole = "Unknown"
+    else
+        local name = LocalPlayer.Team.Name
+        if name == "Killer" then
+            cachedRole = "Killer"
+        elseif name == "Survivors" then
+            cachedRole = "Survivor"
+        else
+            cachedRole = "Lobby"
+        end
+    end
+    lastRoleCheck = now
+    return cachedRole
 end
 
 local function lockMouse()
@@ -27,12 +44,25 @@ local function unlockMouse()
     UserInputService.MouseIconEnabled = true
 end
 
-local function getClosestTarget()
+-- Throttle untuk pencarian target (2x per detik, bukan per frame)
+local lastTargetSearch = 0
+local function getClosestTargetThrottled()
+    local now = tick()
+    if now - lastTargetSearch < 0.5 then
+        return currentTarget
+    end
+    lastTargetSearch = now
+    
     local closestTarget = nil
     local shortestDistance = math.huge
     local screenCenter = Camera.ViewportSize / 2
-    local playerPosition = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character["HumanoidRootPart"].Position or Vector3.new(0, 0, 0)
-
+    local playerChar = LocalPlayer.Character
+    if not playerChar then return nil end
+    
+    local playerPosition = playerChar:FindFirstChild("HumanoidRootPart")
+    if not playerPosition then return nil end
+    playerPosition = playerPosition.Position
+    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             local targetPart = player.Character:FindFirstChild("HumanoidRootPart")
@@ -42,11 +72,12 @@ local function getClosestTarget()
                 
                 if distanceFromPlayer <= maxLockDistance then
                     local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                    local distanceOnScreen = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
-
-                    if onScreen and distanceOnScreen < shortestDistance then
-                        closestTarget = player
-                        shortestDistance = distanceOnScreen
+                    if onScreen then
+                        local distanceOnScreen = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+                        if distanceOnScreen < shortestDistance then
+                            closestTarget = player
+                            shortestDistance = distanceOnScreen
+                        end
                     end
                 end
             end
@@ -59,17 +90,18 @@ local function lockOnTarget()
     if currentTarget and currentTarget.Character then
         local targetPart = currentTarget.Character:FindFirstChild("HumanoidRootPart")
         if targetPart then
-            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), 0.9)
+            Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), 0.7)
         else
             currentTarget = nil
         end
     end
 end
 
+-- RenderStepped dengan throttle
 RunService.RenderStepped:Connect(function()
     if aimbotEnabled and GetRole() == "Killer" then
         if not currentTarget then
-            currentTarget = getClosestTarget()
+            currentTarget = getClosestTargetThrottled()
         end
         if currentTarget then
             lockOnTarget()
@@ -105,11 +137,8 @@ local function updateGUIVisibility()
     end
 end
 
-local function createGUI()
-    if game.CoreGui:FindFirstChild("SimpleAimbot") then
-        game.CoreGui.SimpleAimbot:Destroy()
-    end
-
+-- GUI dibuat SEKALI, tidak auto-load ulang
+if not game.CoreGui:FindFirstChild("SimpleAimbot") then
     ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "SimpleAimbot"
     ScreenGui.Parent = game.CoreGui
@@ -189,9 +218,12 @@ local function createGUI()
         end
         dragging = false
     end)
+else
+    ScreenGui = game.CoreGui.SimpleAimbot
+    button = ScreenGui:FindFirstChildWhichIsA("ImageButton")
+    stroke = button and button:FindFirstChildWhichIsA("UIStroke")
 end
 
-createGUI()
 updateGUIVisibility()
 
 LocalPlayer:GetPropertyChangedSignal("Team"):Connect(updateGUIVisibility)
@@ -200,4 +232,5 @@ Players.LocalPlayer.CharacterAdded:Connect(function()
     if not aimbotEnabled then
         unlockMouse()
     end
+    currentTarget = nil
 end)

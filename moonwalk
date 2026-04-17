@@ -10,7 +10,7 @@ local root = char:WaitForChild("HumanoidRootPart")
 local currentGui = nil
 local button = nil
 
--- Cache GetRole (kurangi beban per frame)
+-- Cache GetRole
 local cachedRole = nil
 local lastRoleCheck = 0
 
@@ -75,6 +75,7 @@ local function disableMoonwalk()
     turningRight = false
 end
 
+-- Fungsi destroy GUI
 local function destroyGUI()
     if currentGui then
         currentGui:Destroy()
@@ -83,9 +84,11 @@ local function destroyGUI()
     end
 end
 
+-- Fungsi create GUI (hanya dicek sekali saat execute)
 local function createGUI()
     destroyGUI()
     
+    -- GUI hanya dibuat jika role Survivor SAAT EKSEKUTE
     if GetRole() ~= "Survivor" then
         return
     end
@@ -113,7 +116,7 @@ local function createGUI()
     button.TouchEnded:Connect(disableMoonwalk)
 end
 
--- Input handling
+-- Input handling (tetap berjalan, tapi moonwalk hanya bisa aktif jika role Survivor)
 UIS.InputBegan:Connect(function(input)
     if not moonwalk then return end
     if GetRole() ~= "Survivor" then
@@ -171,26 +174,10 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-player.CharacterAdded:Connect(function(newChar)
-    char = newChar
-    humanoid = newChar:WaitForChild("Humanoid")
-    root = newChar:WaitForChild("HumanoidRootPart")
-    if moonwalk then
-        disableMoonwalk()
-    end
-end)
+-- TIDAK ADA auto-load:
+-- ❌ Tidak ada GetPropertyChangedSignal("Team")
+-- ❌ Tidak ada CharacterAdded untuk reset GUI
+-- ❌ GUI hanya dibuat SEKALI saat execute
 
-player:GetPropertyChangedSignal("Team"):Connect(function()
-    if GetRole() == "Survivor" then
-        if not currentGui then
-            createGUI()
-        end
-    else
-        destroyGUI()
-        if moonwalk then
-            disableMoonwalk()
-        end
-    end
-end)
-
+-- Eksekusi awal
 createGUI()

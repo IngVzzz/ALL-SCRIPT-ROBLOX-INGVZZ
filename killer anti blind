@@ -1,0 +1,38 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Fungsi GetRole sederhana
+local function GetRole()
+    if not LocalPlayer.Team then return "Unknown" end
+    local name = LocalPlayer.Team.Name
+    if name == "Killer" then return "Killer" end
+    if name == "Survivors" then return "Survivor" end
+    return "Lobby"
+end
+
+local function SetupAntiBlind()
+    pcall(function()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        if not remotes then return end
+        local items = remotes:FindFirstChild("Items")
+        if not items then return end
+        local flashlight = items:FindFirstChild("Flashlight")
+        if not flashlight then return end
+        local gotBlinded = flashlight:FindFirstChild("GotBlinded")
+        
+        if gotBlinded and gotBlinded:IsA("RemoteEvent") then
+            local oldFire = gotBlinded.FireServer
+            gotBlinded.FireServer = function(self, ...)
+                if GetRole() == "Killer" then
+                    return nil
+                end
+                if oldFire then
+                    return oldFire(self, ...)
+                end
+            end
+        end
+    end)
+end
+
+SetupAntiBlind()

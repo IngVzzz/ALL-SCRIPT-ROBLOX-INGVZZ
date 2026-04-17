@@ -9,7 +9,6 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Cache role sederhana
 local cachedRole = nil
 local lastRoleCheck = 0
 
@@ -96,7 +95,6 @@ local function lockOnTarget()
     end
 end
 
--- RenderStepped TANPA auto-reload, hanya jalan jika aimbotEnabled dan role Killer
 RunService.RenderStepped:Connect(function()
     if aimbotEnabled and GetRole() == "Killer" then
         if not currentTarget then
@@ -117,7 +115,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- GUI (tanpa auto-load, dibuat sekali)
 local button = nil
 local stroke = nil
 local ScreenGui = nil
@@ -208,7 +205,28 @@ else
     stroke = button and button:FindFirstChildWhichIsA("UIStroke")
 end
 
--- TAMPILKAN GUI hanya jika role Killer saat execute
+-- LANGSUNG ILANG GUI KALO ROLE BUKAN KILLER
+LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+    if ScreenGui then
+        if GetRole() == "Killer" then
+            ScreenGui.Enabled = true
+        else
+            ScreenGui.Enabled = false
+            if aimbotEnabled then
+                aimbotEnabled = false
+                if button then
+                    button.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+                    button.BackgroundTransparency = 0.15
+                    stroke.Color = Color3.fromRGB(255, 100, 100)
+                end
+                unlockMouse()
+                currentTarget = nil
+            end
+        end
+    end
+end)
+
+-- TAMPILKAN GUI AWAL berdasarkan role saat execute
 if GetRole() == "Killer" then
     ScreenGui.Enabled = true
 else

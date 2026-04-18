@@ -1,10 +1,8 @@
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
-local HitboxConfig = {
-    Size = 17
-}
-
+local HITBOX_Size = 15
 local OriginalHitboxSizes = {}
 
 local function GetRole()
@@ -16,25 +14,33 @@ local function GetRole()
 end
 
 local function IsSurvivor(player)
-    return player and player.Team and player.Team.Name == "Survivors"
+    if player == LocalPlayer then return false end
+    if not player.Team then return false end
+    return player.Team.Name == "Survivors"
+end
+
+local function ResetAllHitboxes()
+    for player, originalSize in pairs(OriginalHitboxSizes) do
+        if player and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.Size = originalSize
+                root.Transparency = 1
+                root.CanCollide = true
+            end
+        end
+    end
+    OriginalHitboxSizes = {}
 end
 
 local function UpdateHitboxes()
+    -- Hanya aktif jika role Killer
     if GetRole() ~= "Killer" then
-        for player, originalSize in pairs(OriginalHitboxSizes) do
-            if player and player.Character then
-                local root = player.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    root.Size = originalSize
-                    root.Transparency = 1
-                    root.CanCollide = true
-                end
-            end
-        end
-        OriginalHitboxSizes = {}
+        ResetAllHitboxes()
         return
     end
     
+    -- Role Killer: perbesar hitbox survivor
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and IsSurvivor(player) then
             local char = player.Character
@@ -45,13 +51,13 @@ local function UpdateHitboxes()
                 if root and hum and hum.Health > 0 then
                     if not OriginalHitboxSizes[player] then
                         OriginalHitboxSizes[player] = root.Size
+                        -- Set sekali saja, tidak setiap frame
+                        root.Size = Vector3.new(HITBOX_Size, HITBOX_Size, HITBOX_Size)
+                        root.CanCollide = false
+                        root.Transparency = 1
                     end
-                    
-                    local size = HitboxConfig.Size
-                    root.Size = Vector3.new(size, size, size)
-                    root.CanCollide = false
-                    root.Transparency = 1
                 elseif root and OriginalHitboxSizes[player] then
+                    -- Survivor mati atau karakter hilang, kembalikan hitbox
                     root.Size = OriginalHitboxSizes[player]
                     root.Transparency = 1
                     root.CanCollide = true
@@ -62,15 +68,52 @@ local function UpdateHitboxes()
     end
 end
 
+-- Event: pemain baru masuk
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        UpdateHitboxes()
+    end)
+end)
+
+-- Event: pemain keluar
 Players.PlayerRemoving:Connect(function(player)
     OriginalHitboxSizes[player] = nil
 end)
 
-local function StartHitboxLoop()
-    while true do
-        UpdateHitboxes()
-        task.wait(0.1)
+-- Event: karakter local spawn/respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    UpdateHitboxes()
+end)
+
+-- Event: role berubah
+LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+    ResetAllHitboxes()
+    UpdateHitboxes()
+end)
+
+-- Event: survivor karakter berubah (spawn/mati)
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        player.CharacterAdded:Connect(function()
+            UpdateHitboxes()
+        end)
+        player.CharacterRemoving:Connect(function()
+            if OriginalHitboxSizes[player] then
+                local char = player.Character
+                if char then
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        root.Size = OriginalHitboxSizes[player]
+                        root.Transparency = 1
+                        root.CanCollide = true
+                    end
+                end
+                OriginalHitboxSizes[player] = nil
+            end
+        end)
     end
 end
 
-task.spawn(StartHitboxLoop)
+-- Update awal
+UpdateHitboxes()

@@ -1,5 +1,5 @@
 local player = game.Players.LocalPlayer
-local LocalPlayer = player  -- biar konsisten
+local LocalPlayer = player
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
@@ -10,7 +10,6 @@ local root = char:WaitForChild("HumanoidRootPart")
 
 local currentGui = nil
 local button = nil
-local stroke = nil  -- opsional, jika ingin pakai UIStroke
 
 -- Cache GetRole
 local cachedRole = nil
@@ -58,6 +57,7 @@ end
 
 local function enableMoonwalk()
     if GetRole() ~= "Survivor" then return end
+    if not root or not humanoid then return end
     moonwalk = true
     humanoid.AutoRotate = false
     baseYaw = getYaw(root.CFrame)
@@ -69,7 +69,9 @@ end
 
 local function disableMoonwalk()
     moonwalk = false
-    humanoid.AutoRotate = true
+    if humanoid then
+        humanoid.AutoRotate = true
+    end
     if button then
         button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
     end
@@ -115,6 +117,17 @@ local function createGUI()
     button.TouchEnded:Connect(disableMoonwalk)
 end
 
+-- Update referensi karakter saat respawn
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(0.5)
+    char = newChar
+    humanoid = newChar:WaitForChild("Humanoid")
+    root = newChar:WaitForChild("HumanoidRootPart")
+    if moonwalk then
+        disableMoonwalk()
+    end
+end)
+
 -- Input handling
 UIS.InputBegan:Connect(function(input)
     if not moonwalk then return end
@@ -157,7 +170,7 @@ UIS.TouchEnded:Connect(function()
 end)
 
 RunService.RenderStepped:Connect(function(dt)
-    if moonwalk and root and GetRole() == "Survivor" then
+    if moonwalk and root and humanoid and GetRole() == "Survivor" then
         if turningLeft then
             currentYaw = math.clamp(currentYaw - turnSpeed * dt, baseYaw - maxTurn, baseYaw + maxTurn)
         elseif turningRight then
@@ -173,20 +186,33 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- ========== TAMBAHAN: GUI LANGSUNG ILANG SAAT ROLE BUKAN SURVIVOR ==========
+-- GUI hilang saat role bukan Survivor, muncul saat role Survivor
 player:GetPropertyChangedSignal("Team"):Connect(function()
     if currentGui then
         if GetRole() == "Survivor" then
             currentGui.Enabled = true
+            -- Update referensi karakter saat ganti role (jika perlu)
+            if not root or not humanoid then
+                local newChar = player.Character
+                if newChar then
+                    char = newChar
+                    humanoid = newChar:FindFirstChild("Humanoid")
+                    root = newChar:FindFirstChild("HumanoidRootPart")
+                end
+            end
         else
             currentGui.Enabled = false
             if moonwalk then
                 disableMoonwalk()
             end
         end
+    else
+        -- Jika GUI belum ada dan role Survivor, buat GUI
+        if GetRole() == "Survivor" then
+            createGUI()
+        end
     end
 end)
--- ==========================================================================
 
 -- Eksekusi awal
 createGUI()

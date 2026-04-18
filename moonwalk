@@ -1,4 +1,5 @@
 local player = game.Players.LocalPlayer
+local LocalPlayer = player  -- biar konsisten
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
@@ -9,6 +10,7 @@ local root = char:WaitForChild("HumanoidRootPart")
 
 local currentGui = nil
 local button = nil
+local stroke = nil  -- opsional, jika ingin pakai UIStroke
 
 -- Cache GetRole
 local cachedRole = nil
@@ -75,7 +77,6 @@ local function disableMoonwalk()
     turningRight = false
 end
 
--- Fungsi destroy GUI
 local function destroyGUI()
     if currentGui then
         currentGui:Destroy()
@@ -84,11 +85,9 @@ local function destroyGUI()
     end
 end
 
--- Fungsi create GUI (hanya dicek sekali saat execute)
 local function createGUI()
     destroyGUI()
     
-    -- GUI hanya dibuat jika role Survivor SAAT EKSEKUTE
     if GetRole() ~= "Survivor" then
         return
     end
@@ -116,7 +115,7 @@ local function createGUI()
     button.TouchEnded:Connect(disableMoonwalk)
 end
 
--- Input handling (tetap berjalan, tapi moonwalk hanya bisa aktif jika role Survivor)
+-- Input handling
 UIS.InputBegan:Connect(function(input)
     if not moonwalk then return end
     if GetRole() ~= "Survivor" then
@@ -174,10 +173,20 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- TIDAK ADA auto-load:
--- ❌ Tidak ada GetPropertyChangedSignal("Team")
--- ❌ Tidak ada CharacterAdded untuk reset GUI
--- ❌ GUI hanya dibuat SEKALI saat execute
+-- ========== TAMBAHAN: GUI LANGSUNG ILANG SAAT ROLE BUKAN SURVIVOR ==========
+player:GetPropertyChangedSignal("Team"):Connect(function()
+    if currentGui then
+        if GetRole() == "Survivor" then
+            currentGui.Enabled = true
+        else
+            currentGui.Enabled = false
+            if moonwalk then
+                disableMoonwalk()
+            end
+        end
+    end
+end)
+-- ==========================================================================
 
 -- Eksekusi awal
 createGUI()

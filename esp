@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
 local Hook = {
     Players = {
@@ -7,6 +8,8 @@ local Hook = {
         ["Survivor"] = {Color = Color3.fromRGB(64, 224, 255), On = true}
     }
 }
+
+local activeHighlights = {} -- Track highlight yang aktif
 
 local function GetRole()
     if not localPlayer.Team then return "Unknown" end
@@ -17,9 +20,15 @@ local function GetRole()
 end
 
 local function ESP(obj, color)
-    if obj:FindFirstChild("H") then return end
+    -- Cek apakah sudah ada highlight
+    local existing = obj:FindFirstChild("ESP_Highlight")
+    if existing then
+        if existing.FillColor == color then return end
+        existing:Destroy()
+    end
+    
     local h = Instance.new("Highlight")
-    h.Name = "H"
+    h.Name = "ESP_Highlight"
     h.Adornee = obj
     h.FillColor = color
     h.OutlineColor = color
@@ -27,79 +36,97 @@ local function ESP(obj, color)
     h.OutlineTransparency = 0.38
     h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     h.Parent = obj
+    activeHighlights[obj] = h
+end
+
+local function removeESP(character)
+    local highlight = character:FindFirstChild("ESP_Highlight")
+    if highlight then
+        highlight:Destroy()
+        activeHighlights[character] = nil
+    end
 end
 
 local function removeAllESP()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then
-            local highlight = p.Character:FindFirstChild("H")
-            if highlight then
-                highlight:Destroy()
-            end
-        end
+    for obj, highlight in pairs(activeHighlights) do
+        if highlight then highlight:Destroy() end
     end
+    activeHighlights = {}
 end
 
 local function updateESP()
     local myRole = GetRole()
+    
+    -- Hanya aktif jika role Survivor atau Killer
     if myRole ~= "Survivor" and myRole ~= "Killer" then
         removeAllESP()
         return
     end
     
+    -- Loop semua pemain
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= localPlayer and p.Character and p.Team then
-            if p.Team.Name == "Killer" and Hook.Players["Killer"].On then
-                ESP(p.Character, Hook.Players["Killer"].Color)
-            elseif p.Team.Name == "Survivors" and Hook.Players["Survivor"].On then
-                ESP(p.Character, Hook.Players["Survivor"].Color)
+        if p ~= localPlayer and p.Character then
+            local teamName = p.Team and p.Team.Name
+            local shouldESP = false
+            local color = nil
+            
+            if teamName == "Killer" and Hook.Players["Killer"].On then
+                shouldESP = true
+                color = Hook.Players["Killer"].Color
+            elseif teamName == "Survivors" and Hook.Players["Survivor"].On then
+                shouldESP = true
+                color = Hook.Players["Survivor"].Color
+            end
+            
+            if shouldESP then
+                ESP(p.Character, color)
+            else
+                if p.Character then
+                    removeESP(p.Character)
+                end
             end
         end
     end
 end
 
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= localPlayer and p.Character and p.Team then
-        if p.Team.Name == "Killer" then
-            ESP(p.Character, Hook.Players["Killer"].Color)
-        elseif p.Team.Name == "Survivors" then
-            ESP(p.Character, Hook.Players["Survivor"].Color)
-        end
-    end
-end
-
+-- Event: pemain baru masuk
 Players.PlayerAdded:Connect(function(player)
     if player ~= localPlayer then
         player.CharacterAdded:Connect(function(character)
             task.wait(0.3)
-            if player.Team then
-                if player.Team.Name == "Killer" then
-                    ESP(character, Hook.Players["Killer"].Color)
-                elseif player.Team.Name == "Survivors" then
-                    ESP(character, Hook.Players["Survivor"].Color)
-                end
-            end
-        end)
-    end
-end)
-
-localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-    updateESP()
-end)
-
-Players.PlayerAdded:Connect(function()
-    task.wait(0.3)
-    updateESP()
-end)
-
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= localPlayer then
-        p.CharacterAdded:Connect(function()
-            task.wait(0.3)
             updateESP()
         end)
     end
-end
+end)
 
-task.wait(0.3)
+-- Event: pemain keluar (bersihkan highlight)
+Players.PlayerRemoving:Connect(function(player)
+    if player.Character then
+        removeESP(player.Character)
+    end
+end)
+
+-- Event: role local berubah
+localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+    removeAllESP()
+    updateESP()
+end)
+
+-- Event: localPlayer karakter respawn
+localPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    updateESP()
+end)
+
+-- Update awal
 updateESP()
+
+-- Optional: update berkala setiap 1 detik (jika ada yang luput)
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if GetRole() == "Survivor" or GetRole() == "Killer" then
+            updateESP()
+        end
+    end
+end)

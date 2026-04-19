@@ -35,8 +35,8 @@ local function setup()
     
     isSetup = true  
     
-    LocalPlayer.CameraMaxZoomDistance = 50
-    LocalPlayer.CameraMinZoomDistance = 10
+    LocalPlayer.CameraMaxZoomDistance = 40
+    LocalPlayer.CameraMinZoomDistance = 8
     
     LocalPlayer:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(function()
         if GetRole() == "Survivor" then

@@ -9,7 +9,7 @@ local Hook = {
     }
 }
 
-local activeHighlights = {} -- Track highlight yang aktif
+local activeHighlights = {}
 
 local function GetRole()
     if not localPlayer.Team then return "Unknown" end
@@ -20,7 +20,6 @@ local function GetRole()
 end
 
 local function ESP(obj, color)
-    -- Cek apakah sudah ada highlight
     local existing = obj:FindFirstChild("ESP_Highlight")
     if existing then
         if existing.FillColor == color then return end
@@ -33,7 +32,7 @@ local function ESP(obj, color)
     h.FillColor = color
     h.OutlineColor = color
     h.FillTransparency = 0.8
-    h.OutlineTransparency = 0.38
+    h.OutlineTransparency = 0.4
     h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     h.Parent = obj
     activeHighlights[obj] = h
@@ -57,13 +56,11 @@ end
 local function updateESP()
     local myRole = GetRole()
     
-    -- Hanya aktif jika role Survivor atau Killer
     if myRole ~= "Survivor" and myRole ~= "Killer" then
         removeAllESP()
         return
     end
     
-    -- Loop semua pemain
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= localPlayer and p.Character then
             local teamName = p.Team and p.Team.Name
@@ -89,7 +86,6 @@ local function updateESP()
     end
 end
 
--- Event: pemain baru masuk
 Players.PlayerAdded:Connect(function(player)
     if player ~= localPlayer then
         player.CharacterAdded:Connect(function(character)
@@ -99,29 +95,24 @@ Players.PlayerAdded:Connect(function(player)
     end
 end)
 
--- Event: pemain keluar (bersihkan highlight)
 Players.PlayerRemoving:Connect(function(player)
     if player.Character then
         removeESP(player.Character)
     end
 end)
 
--- Event: role local berubah
 localPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     removeAllESP()
     updateESP()
 end)
 
--- Event: localPlayer karakter respawn
 localPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     updateESP()
 end)
 
--- Update awal
 updateESP()
 
--- Optional: update berkala setiap 1 detik (jika ada yang luput)
 task.spawn(function()
     while true do
         task.wait(1)

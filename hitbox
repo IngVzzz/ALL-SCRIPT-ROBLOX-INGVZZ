@@ -34,13 +34,11 @@ local function ResetAllHitboxes()
 end
 
 local function UpdateHitboxes()
-    -- Hanya aktif jika role Killer
     if GetRole() ~= "Killer" then
         ResetAllHitboxes()
         return
     end
     
-    -- Role Killer: perbesar hitbox survivor
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and IsSurvivor(player) then
             local char = player.Character
@@ -51,13 +49,11 @@ local function UpdateHitboxes()
                 if root and hum and hum.Health > 0 then
                     if not OriginalHitboxSizes[player] then
                         OriginalHitboxSizes[player] = root.Size
-                        -- Set sekali saja, tidak setiap frame
                         root.Size = Vector3.new(HITBOX_Size, HITBOX_Size, HITBOX_Size)
                         root.CanCollide = false
                         root.Transparency = 1
                     end
                 elseif root and OriginalHitboxSizes[player] then
-                    -- Survivor mati atau karakter hilang, kembalikan hitbox
                     root.Size = OriginalHitboxSizes[player]
                     root.Transparency = 1
                     root.CanCollide = true
@@ -68,31 +64,26 @@ local function UpdateHitboxes()
     end
 end
 
--- Event: pemain baru masuk
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
         UpdateHitboxes()
     end)
 end)
 
--- Event: pemain keluar
 Players.PlayerRemoving:Connect(function(player)
     OriginalHitboxSizes[player] = nil
 end)
 
--- Event: karakter local spawn/respawn
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     UpdateHitboxes()
 end)
 
--- Event: role berubah
 LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     ResetAllHitboxes()
     UpdateHitboxes()
 end)
 
--- Event: survivor karakter berubah (spawn/mati)
 for _, player in ipairs(Players:GetPlayers()) do
     if player ~= LocalPlayer then
         player.CharacterAdded:Connect(function()
@@ -115,5 +106,4 @@ for _, player in ipairs(Players:GetPlayers()) do
     end
 end
 
--- Update awal
 UpdateHitboxes()

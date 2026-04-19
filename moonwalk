@@ -11,6 +11,7 @@ local root = char:WaitForChild("HumanoidRootPart")
 local currentGui = nil
 local button = nil
 
+-- Cache GetRole
 local cachedRole = nil
 local lastRoleCheck = 0
 
@@ -35,6 +36,7 @@ local function GetRole()
     return cachedRole
 end
 
+-- Variabel moonwalk
 local moonwalk = false
 local baseYaw = 0
 local currentYaw = 0
@@ -86,10 +88,14 @@ local function destroyGUI()
 end
 
 local function createGUI()
-    destroyGUI()
-    
+    -- Hanya buat GUI jika role Survivor
     if GetRole() ~= "Survivor" then
         return
+    end
+    
+    -- Hapus GUI lama jika ada
+    if currentGui then
+        destroyGUI()
     end
     
     local gui = Instance.new("ScreenGui")
@@ -115,6 +121,7 @@ local function createGUI()
     button.TouchEnded:Connect(disableMoonwalk)
 end
 
+-- Update referensi karakter saat respawn
 player.CharacterAdded:Connect(function(newChar)
     task.wait(0.5)
     char = newChar
@@ -125,6 +132,7 @@ player.CharacterAdded:Connect(function(newChar)
     end
 end)
 
+-- Input handling
 UIS.InputBegan:Connect(function(input)
     if not moonwalk then return end
     if GetRole() ~= "Survivor" then
@@ -182,29 +190,19 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
+-- ========== PERUBAHAN UTAMA ==========
+-- Saat role berubah, HANCURKAN GUI jika bukan Survivor, BUAT GUI jika Survivor
 player:GetPropertyChangedSignal("Team"):Connect(function()
-    if currentGui then
-        if GetRole() == "Survivor" then
-            currentGui.Enabled = true
-            if not root or not humanoid then
-                local newChar = player.Character
-                if newChar then
-                    char = newChar
-                    humanoid = newChar:FindFirstChild("Humanoid")
-                    root = newChar:FindFirstChild("HumanoidRootPart")
-                end
-            end
-        else
-            currentGui.Enabled = false
-            if moonwalk then
-                disableMoonwalk()
-            end
-        end
+    if GetRole() == "Survivor" then
+        createGUI()  -- Buat GUI baru
     else
-        if GetRole() == "Survivor" then
-            createGUI()
+        destroyGUI() -- Hancurkan GUI (bukan hanya disembunyikan)
+        if moonwalk then
+            disableMoonwalk()
         end
     end
 end)
+-- ====================================
 
+-- Eksekusi awal
 createGUI()

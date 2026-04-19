@@ -205,7 +205,6 @@ else
     stroke = button and button:FindFirstChildWhichIsA("UIStroke")
 end
 
--- LANGSUNG ILANG GUI KALO ROLE BUKAN KILLER
 LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     if ScreenGui then
         if GetRole() == "Killer" then
@@ -226,7 +225,6 @@ LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
     end
 end)
 
--- TAMPILKAN GUI AWAL berdasarkan role saat execute
 if GetRole() == "Killer" then
     ScreenGui.Enabled = true
 else

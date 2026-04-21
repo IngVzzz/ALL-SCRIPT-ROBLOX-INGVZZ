@@ -32,7 +32,7 @@ local function ESP(obj, color)
     h.FillColor = color
     h.OutlineColor = color
     h.FillTransparency = 0.8
-    h.OutlineTransparency = 0.4
+    h.OutlineTransparency = 0.45
     h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     h.Parent = obj
     activeHighlights[obj] = h
